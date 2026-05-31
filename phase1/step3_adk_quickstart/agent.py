@@ -48,14 +48,18 @@ schema for Gemini. The result is identical; the mechanism is different.
 import math
 
 from google.adk.agents import Agent
+from google.adk.tools import FunctionTool
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TOOL — plain Python function, no decorator
+# TOOL — wrapped as FunctionTool for ADK 1.0
+# ADK 1.0 requires tools to be FunctionTool instances, not plain callables.
+# FunctionTool reads the function name, docstring, and type hints to build
+# the Gemini function declaration — same as @tool in LangChain, different package.
 # ─────────────────────────────────────────────────────────────────────────────
-# ADK passes this function's name, docstring, and type hints directly to Gemini
-# as a function declaration. Same end result as bind_tools() in LangGraph,
-# just without the @tool decorator.
+# FunctionTool(func=calculator) does that wrapping — passed to Agent() below.
+
+
 
 def calculator(expression: str) -> dict:
     """
@@ -104,14 +108,14 @@ def calculator(expression: str) -> dict:
 root_agent = Agent(
     name="calculator_agent",
     model="gemini-2.5-flash",
-    description="A helpful assistant that can perform mathematical caluculations.",
+    description="A helpful assistant that can perform mathematical calculations.",
     instruction=(
-        "You are a helpful calulator assistant. "
+        "You are a helpful calculator assistant. "
         "When the user asks you to compute or calculate something, "
         "always use the calculator tool rather than computing in your head. "
-        "Show your reaosning before giving the final answer."
+        "Show your reasoning before giving the final answer."
     ),
-    tool=[calculator],
+    tools=[FunctionTool(func=calculator)],  # ← CHANGED: wrap with FunctionTool
 )
 
 

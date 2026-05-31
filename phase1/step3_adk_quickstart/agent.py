@@ -110,10 +110,9 @@ root_agent = Agent(
     model="gemini-2.5-flash",
     description="A helpful assistant that can perform mathematical calculations.",
     instruction=(
-        "You are a helpful calculator assistant. "
-        "When the user asks you to compute or calculate something, "
-        "always use the calculator tool rather than computing in your head. "
-        "Show your reasoning before giving the final answer."
+        "You are a helpful assistant. "
+        "When the user asks you to calculate or compute something, use the calculator tool. "
+        "For all other questions, answer directly from your knowledge."
     ),
     tools=[FunctionTool(func=calculator)],  # ← CHANGED: wrap with FunctionTool
 )

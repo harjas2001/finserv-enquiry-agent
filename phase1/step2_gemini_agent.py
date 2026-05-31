@@ -117,6 +117,33 @@ llm_with_tools = llm.bind_tools(tools)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# CONTENT EXTRACTION HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemini 2.5 Flash is a thinking model. Its response.content can be either:
+#   - A plain string  (simple responses, older models)
+#   - A list of dicts (thinking models — content blocks with type/text/extras)
+#     e.g. [{'type': 'text', 'text': 'The answer is...', 'extras': {'signature': ...}}]
+#
+# The 'signature' in extras is Gemini's internal reasoning trace — not user-facing.
+# This helper normalises both formats into a plain string so the rest of the
+# code doesn't need to care which format came back.
+#
+# This is a behavioural difference from OpenAI worth noting for Slide 5.
+
+def extract_text(content) -> str:
+    """Normalise Gemini content to a plain string regardless of format."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return str(content)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 4–7. NODES, ROUTER, GRAPH — identical to Step 1
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -127,7 +154,7 @@ def agent_node(state: AgentState) -> dict:
         for tc in response.tool_calls:
             print(f"[AGENT] → Tool call: {tc['name']}({tc['args']})")
     else:
-        print(f"[AGENT] → Final answer: {response.content[:120]}")
+        print(f"[AGENT] → Final answer: {extract_text(response.content)[:120]}")
     return {"messages": [response]}
 
 
@@ -178,8 +205,9 @@ def run_agent(user_message: str) -> str:
                 elif hasattr(msg, "tool_call_id"):
                     print(f"    {msg_type}: result = {msg.content}")
                 elif hasattr(msg, "content") and msg.content:
-                    print(f"    {msg_type}: {msg.content}")
-                    final_answer = msg.content
+                    clean = extract_text(msg.content)
+                    print(f"    {msg_type}: {clean}")
+                    final_answer = clean
 
     print(f"\n{'─' * 60}")
     print(f"  FINAL: {final_answer}")

@@ -1,0 +1,22 @@
+# ─── Core LangGraph + LangChain ───────────────────────────────────────────────
+# LangGraph is the orchestration layer. LangChain provides LLM integrations,
+# tool decorators, and message types.
+langgraph>=0.2.28
+langchain>=0.3.7
+langchain-core>=0.3.15
+langchain-openai>=0.2.7          # Phase 1 (Step 1). Swapped for langchain-google-genai in Step 2.
+
+# ─── Phase 2 additions (RAG) ──────────────────────────────────────────────────
+# chromadb                       # Vector store — uncomment in Phase 2
+# langchain-google-genai          # Gemini LLM + embeddings — uncomment in Step 2
+
+# ─── Serving ─────────────────────────────────────────────────────────────────
+# fastapi                        # Uncomment in Phase 3
+# uvicorn[standard]              # Uncomment in Phase 3
+
+# ─── Evals ────────────────────────────────────────────────────────────────────
+# deepeval                       # Uncomment in Phase 4
+
+# ─── Utilities ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.1             # Load .env API keys
+typing-extensions>=4.9.0        # TypedDict compatibility across Python versions

@@ -101,7 +101,18 @@ def calculator(expression: str) -> dict:
 # The variable MUST be named `root_agent` — ADK's discovery mechanism looks
 # for this exact name in agent.py.
 
-
+root_agent = Agent(
+    name="calculator_agent",
+    model="gemini-2.5-flash",
+    description="A helpful assistant that can perform mathematical caluculations.",
+    instruction=(
+        "You are a helpful calulator assistant. "
+        "When the user asks you to compute or calculate something, "
+        "always use the calculator tool rather than computing in your head. "
+        "Show your reaosning before giving the final answer."
+    ),
+    tool=[calculator],
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

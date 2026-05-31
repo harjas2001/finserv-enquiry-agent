@@ -9,6 +9,7 @@ langchain-openai>=0.2.7          # Phase 1 (Step 1). Swapped for langchain-googl
 # ─── Phase 2 additions (RAG) ──────────────────────────────────────────────────
 # chromadb                       # Vector store — uncomment in Phase 2
 langchain-google-genai>=2.0.0          # Gemini LLM (step2) + embeddings (phase2)
+google-adk>=1.0.0
 
 # ─── Serving ─────────────────────────────────────────────────────────────────
 # fastapi                        # Uncomment in Phase 3

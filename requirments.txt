@@ -5,11 +5,15 @@ langgraph>=0.2.28
 langchain>=0.3.7
 langchain-core>=0.3.15
 langchain-openai>=0.2.7          # Phase 1 (Step 1). Swapped for langchain-google-genai in Step 2.
-
-# ─── Phase 2 additions (RAG) ──────────────────────────────────────────────────
-# chromadb                       # Vector store — uncomment in Phase 2
 langchain-google-genai>=2.0.0          # Gemini LLM (step2) + embeddings (phase2)
 google-adk>=1.0.0
+
+# ─── Phase 2 additions (RAG) ──────────────────────────────────────────────────
+langchain-text-splitters          # RecursiveCharacterTextSplitter
+langchain-community               # PyPDFLoader (document loading)
+langchain-chroma                  # ChromaDB LangChain integration
+chromadb                          # Vector store — persists to data/chroma_db/
+pypdf                             # PDF text extraction (used by PyPDFLoader)
 
 # ─── Serving ─────────────────────────────────────────────────────────────────
 # fastapi                        # Uncomment in Phase 3

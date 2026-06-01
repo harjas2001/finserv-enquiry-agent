@@ -181,7 +181,7 @@ def build_vectorstore(chunks: list) -> Chroma:
     print()
 
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/text-embedding-004",
+        model="text-embedding-004",
         google_api_key=api_key,
     )
 

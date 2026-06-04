@@ -9,7 +9,7 @@ Run from the project root:
 What this script does:
   1. Load  — reads all .pdf files from data/knowledge_base/ (one Document per page)
   2. Chunk — splits into 512-token chunks with 50-token overlap
-  3. Embed — calls Gemini text-embedding-004 on each chunk
+  3. Embed — calls Gemini gemini-embedding-2 on each chunk
   4. Store — persists to ChromaDB at data/chroma_db/
 """
 
@@ -22,7 +22,7 @@ from langchain_community.document_loaders import PyPDFLoader
 
 load_dotenv()  # loads .env if present; no-op if not
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from src.rag.embeddings import GeminiEmbeddings
 from langchain_chroma import Chroma
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ def build_vectorstore(chunks: list) -> Chroma:
     """
     Generate embeddings for every chunk and persist to ChromaDB.
 
-    What Gemini text-embedding-004 does:
+    What Gemini gemini-embedding-2 does:
     ─────────────────────────────────────
     Takes a text string → returns a list of 768 floats.
     That list is a point in 768-dimensional space. Semantically similar
@@ -168,22 +168,13 @@ def build_vectorstore(chunks: list) -> Chroma:
     CHROMA_PERSIST_DIR. The next time we load Chroma(..., persist_directory=...),
     it reads from disk — no need to re-embed.
     """
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        print("\n  ERROR: GOOGLE_API_KEY not set.")
-        print("  Export it: export GOOGLE_API_KEY='your-key-here'")
-        sys.exit(1)
-
-    print(f"  Embedding model : text-embedding-004")
+    print(f"  Embedding model : gemini-embedding-2")
     print(f"  Vector dimensions: 768")
     print(f"  Chunks to embed  : {len(chunks)}")
     print(f"  Persisting to    : {CHROMA_PERSIST_DIR}/")
     print()
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="text-embedding-004",
-        google_api_key=api_key,
-    )
+    embeddings = GeminiEmbeddings(model="gemini-embedding-2")
 
     # Chroma.from_documents:
     #   For each chunk, calls embeddings.embed_documents([chunk.page_content])

@@ -219,3 +219,5 @@ __marimo__/
 
 #database
 *.db
+data/knowledge_base/*
+data/chroma_db/*

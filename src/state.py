@@ -58,7 +58,7 @@ from langgraph.graph.message import add_messages
 # ENQUIRY STATE
 # ─────────────────────────────────────────────────────────────────────────────
 
-class EquiryState(TypedDict):
+class EnquiryState(TypedDict):
     """
     Shared state for the Clearwater Bank enquiry handler.
  
@@ -145,13 +145,47 @@ class EquiryState(TypedDict):
     FastAPI checks this: if non-empty, return HTTP 500 with the error message.
     Keeping error propagation explicit (as a state field) rather than relying
     on Python exceptions makes failures visible across the graph boundary."""
-
     
 
 # ─────────────────────────────────────────────────────────────────────────────
 # INITIAL STATE FACTORY
 # ─────────────────────────────────────────────────────────────────────────────
-
+    """
+    Build a fully-initialised EnquiryState for graph.invoke().
+ 
+    LangGraph requires every TypedDict field to be present in the state dict.
+    A missing field causes a KeyError mid-graph — not at startup, but at
+    whatever node first tries to read the missing field. Hard to debug.
+ 
+    This factory ensures every field is present and initialised to a sensible
+    empty value. Callers only supply what they actually know (query and
+    customer_id); everything else is set to its zero value.
+ 
+    Usage in graph.py / tests:
+        initial = make_initial_state("What's my balance?", customer_id="C001")
+        result  = graph.invoke(initial)
+        print(result["final_response"])
+ 
+    Usage in the FastAPI layer (Phase 3 end):
+        initial  = make_initial_state(req.query, req.customer_id)
+        result   = graph.invoke(initial)
+        if result["error"]:
+            raise HTTPException(500, detail=result["error"])
+        return {"answer": result["final_response"], "intent": result["intent"]}
+    """
+def make_initial_state(query: str, customer_id: str = "") -> EnquiryState:
+    return {
+        "query":                    query,
+        "customer_id":              customer_id,
+        "intent":                   "",
+        "messages":                 [],
+        "subagent_response":        "",
+        "sources":                  [],
+        "escalated":                False,
+        "guardrail_flags":          {},
+        "final_response":           "",
+        "error":                    ""
+    }
 
 
 

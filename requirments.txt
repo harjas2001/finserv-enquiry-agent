@@ -12,14 +12,14 @@ google-adk>=1.0.0                # Phase 1 Step 3 — ADK quickstart + pulls in 
 # Tested working version: 1.75.0. GeminiEmbeddings forces api_version='v1' explicitly
 # to bypass the SDK default of v1beta. Do not remove the http_options override.
 
-# ─── RAG (Phase 2 — active) ───────────────────────────────────────────────────
+# ─── RAG (Phase 2) ───────────────────────────────────────────────────
 chromadb>=0.5.0                  # Vector store — local dev (Vertex AI Vector Search in prod vision)
 langchain-chroma>=0.1.0          # LangChain ↔ ChromaDB integration (Chroma class in retriever.py)
 pypdf>=4.0.0                     # PDF loading — required by PyPDFLoader
 
-# ─── Serving (Phase 3 — uncomment when starting Phase 3) ─────────────────────
-# fastapi>=0.111.0
-# uvicorn[standard]>=0.29.0
+# ─── Serving (Phase 3 ) ─────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
 
 # ─── Evals (Phase 4 — uncomment when starting Phase 4) ───────────────────────
 # deepeval>=1.0.0

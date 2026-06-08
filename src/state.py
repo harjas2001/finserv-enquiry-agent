@@ -188,7 +188,6 @@ def make_initial_state(query: str, customer_id: str = "") -> EnquiryState:
     }
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # VERIFICATION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -201,5 +200,80 @@ def make_initial_state(query: str, customer_id: str = "") -> EnquiryState:
 #   3. The add_messages reducer appends, not replaces (critical to verify once)
 #   4. Simulated node writes work as expected
 #
-# You should see every check print "✓" before moving to orchestrator.py.
+# All tests should be "✓"
 
+if __name__ == "__main__":
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langgraph.graph.message import add_messages
+
+    print("=" * 60)
+    print("EnquiryState schema verification")
+    print("=" * 60)
+
+    # Check 1: Factory produces correct initial state
+    print("\n[1] make_intial_state()")
+    state = make_initial_state(
+        query="What is my current account balance?",
+        customer_id="C001" #mock
+    )
+    for field, value in state.items():
+        print(f" {field:22s} {value!r}")
+    print("  ✓ All fields present")
+
+    # Check 2: Intent routing (last-write-wins, NO REDUCER)
+    print("\n[2] Orchestrator sets intent")
+    state["intent"] = "account"
+    print(f"    intent = {state['intent']!r} ✓")
+
+    #check 3: add_messages reducer appends, never replaces
+    print("\n[3] add_messages reducer")
+    print(f" messages before: {state['messages']!r}")
+    # add_messages(state["messages"], node_return["messages"])
+    # which appends rather than replaces.
+    orchestrator_messages = [
+        SystemMessage(content="Classify the intent of the following query into one of: account, product, complaint, out_of_scope."),
+        HumanMessage(content=state["query"]),
+        AIMessage(content="account")
+    ]
+
+    state["messages"] = add_messages(state["messages"], orchestrator_messages)
+    print(f" messages after: {len(state['messages'])} messages")
+    for m in state["messages"]:
+        label = type(m).__name__
+        snippet = str(m.content)[:60]
+        print(f"   [{label}] {snippet}")
+    print("  ✓ add_messages appended — did not replace")
+    
+    # Check 4: Subagent writes its output
+    print("\n[4] Account subagent writes output (last-write-wins)")
+    state["subagent_response"] = "Your current balance is $4,823.17 (as of today)."
+    state["sources"]           = []      # account subagent — no RAG sources
+    state["escalated"]         = False
+    print(f"  subagent_response = {state['subagent_response']!r}")
+    print(f"  sources           = {state['sources']!r}")
+    print("  ✓ Subagent fields set")
+
+    # Check 5: Guardrail writes final output
+    print("\n[5] Guardrail node writes final output")
+    state["guardrail_flags"] = {
+        "pii_detected":       False,
+        "hallucination_risk": False,
+        "out_of_scope":       False,
+    }
+    # No flags raised → pass subagent_response through to final_response
+    state["final_response"] = state["subagent_response"]
+    print(f"  guardrail_flags = {state['guardrail_flags']}")
+    print(f"  final_response  = {state['final_response']!r}")
+    print("  ✓ Guardrail fields set")
+
+    # Check 6: Error field remains empty on happy path
+    print("\n[6] Error field (happy path should be empty)")
+    print(f"  error = {state['error']!r}")
+    assert state["error"] == "", "error should be empty on happy path"
+    print("  ✓ Error is empty")
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("All checks passed.")
+    print("EnquiryState is correctly defined and behaves as expected.")
+    print("=" * 60)

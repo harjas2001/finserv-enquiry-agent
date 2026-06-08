@@ -76,3 +76,86 @@ Rules:
   - If the query is vague, ambiguous, or does not fit clearly, choose out_of_scope.
   - Reply with ONLY the category name — no punctuation, no explanation, no other text.\
 """
+
+
+#ORCHESTRATOR NODE
+def orchestrator_node(state: EnquiryState) -> dict:
+    """
+    LangGraph node — classifies intent and sets the routing field.
+ 
+    Reads from state:   query
+    Writes to state:    intent  (last-write-wins)
+                        messages (add_messages reducer — appended, not replaced)
+                        error    (only on failure)
+ 
+    Returns a partial dict with exactly the fields this node changes.
+    LangGraph merges it into the running EnquiryState:
+      - intent:   replaces the initial "" value
+      - messages: add_messages appends [SystemMessage, HumanMessage, AIMessage]
+                  to the existing list (starts as [] → becomes 3 messages)
+ 
+    On failure:
+      Routes to "out_of_scope" so the deflector handles the customer gracefully,
+      and writes the exception to state["error"] for the FastAPI layer to log.
+    """
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise EnvironmentError("GOOGLE_API_KEY is not set")
+    
+    query = state["query"]
+    print(f"\n[ORCHESTRATOR] Classifying: '{query[:80]}'")
+
+    try: 
+        client = genai.Client(api_key=api_key)
+
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=query,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0, # set to 0 as we want the routing to be purley deterministic (classification)
+            ),
+        )   
+
+        """response.text is for handling gemini 2.5 flash thinking model content blocks
+        automatically, no extract_text() helper needed when using the google-genai
+        SDK directly. Only needed with the LangChain wrapper"""
+
+        raw = response.text.strip().lower()
+        print(f"[ORCHESTRATOR] Raw intent: '{raw}'")
+
+        # Validate and apply fallback: If Gemini ignores the output constraint in system prompt then just set basic message
+        intent = raw if raw in VALID_INTENTS else "out_of_scope"
+        if intent != raw:
+            print(f"[ORCHESTRATOR] Unexpected format '{raw}' -> fallback: 'out_of_scope'") #logging purposes
+        print(f"[ORCHESTRATOR] Intent: '{intent}' -> routing to {intent} subagent")
+
+        # Build LangChain message objects for state["messages"].
+        # We use the google-genai SDK for the API call but still construct
+        # LangChain message types for the messages field, they're just data
+        # containers. The add_messages reducer will append these three to
+        # state["messages"], which starts as [] from make_initial_state().
+        #
+        # The AIMessage stores raw (what Gemini actually said) rather than intent
+        # (the validated string). This way if there's a fallback, can see
+        # exactly what Gemini returned vs. what the system decided.
+        return {
+            "intent": intent,
+            "messages": [
+                SystemMessage(content=SYSTEM_PROMPT),
+                HumanMessage(content=query),
+                AIMessage(content=raw),
+            ],
+        }
+    
+    except Exception as e:
+        # Gemini call failed (network error, quota exceeded, etc.) This is all backend errors
+        # Route to out_of_scope so the customer sees a graceful response.
+        # Write the error to state for logging, FastAPI will return HTTP 500.
+        print(f"[ORCHESTRATOR] ERROR — {type(e).__name__}: {e}")
+        return {
+            "intent": "out_of_scope",
+            "error": f"Orchestrator classification failed: {e}",
+            "messages": [],
+        }

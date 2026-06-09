@@ -159,3 +159,128 @@ def orchestrator_node(state: EnquiryState) -> dict:
             "error": f"Orchestrator classification failed: {e}",
             "messages": [],
         }
+    
+
+# ROUTING FUNCTION: The conditional edge
+# How this connects to graph.py:
+#
+#   graph.add_conditional_edges(
+#       "orchestrator",        ← source node
+#       route_to_subagent,     ← this function
+#       {                      ← routing map: return value → node name
+#           "account":      "account_node",
+#           "product":      "product_node",
+#           "complaint":    "complaint_node",
+#           "out_of_scope": "deflector_node",
+#       }
+#   )
+#
+# The routing map in graph.py decouples the intent string from the node name.
+
+def route_to_subagent(state: EnquiryState) -> str:
+    """
+    Conditional edge function — maps state["intent"] to the next node key.
+ 
+    Called by LangGraph after orchestrator_node completes. The return value
+    is looked up in the routing map passed to add_conditional_edges() in graph.py.
+ 
+    Returns: "account" | "product" | "complaint" | "out_of_scope"
+    """
+    intent = state.get("intent", "out_of_scope")
+    if intent not in VALID_INTENTS:
+        print(f"[ROUTER] Unexpected intent '{intent}' → deflecting")
+        return "out_of_scope"
+    print(f"[ROUTER] Routing '{intent}'")
+    return intent
+
+
+# TEST HARNESS
+#   1. Raw Gemini response should always be a single bare category name — no
+#      punctuation, no explanation. This confirms the output constraint works.
+#   2. All clear-cut queries (tests 1–4) should classify correctly.
+#   3. The edge case (test 5) is deliberately ambiguous — it may classify as
+#      "product" or "complaint". Either is defensible; the expected answer is
+#      "complaint" per the tie-breaking rule. If Gemini picks "product", that
+#      is before-state evidence.
+#   4. route_to_subagent returns the same string as intent on the happy path.
+
+if __name__ == "__main__":
+    from src.state import make_initial_state
+
+    if not os.environ.get("GOOGLE_API_KEY"):
+        print("ERROR: Google API key not set.")
+        sys.exit(1)
+
+    print("=" * 60)
+    print("ORCHESTRATOR NODE — classification test")
+    print("=" * 60)
+
+    test_cases = [
+        {
+            "query":    "What is the current balance on my savings account?",
+            "expected": "account",
+            "note":     "clear account intent",
+        },
+        {
+            "query":    "What are the current interest rates on your home loans?",
+            "expected": "product",
+            "note":     "clear product intent",
+        },
+        {
+            "query":    "I want to make a formal complaint about unauthorised fees.",
+            "expected": "complaint",
+            "note":     "clear complaint intent",
+        },
+        {
+            "query":    "Can you give me tips on how to invest my superannuation?",
+            "expected": "out_of_scope",
+            "note":     "personalised financial advice, out of scope",
+        },
+        {
+            "query":    "Why has my savings bonus rate dropped? This is completely unacceptable.",
+            "expected": "complaint",
+            "note":     "EDGE CASE — mentions product (rate) but tone is complaint",
+        },
+        {
+            "query":    "What is the weather like in Sydney today?",
+            "expected": "out_of_scope",
+            "note":     "completely unrelated, clean deflection",
+        },
+    ]
+
+    passed = 0
+    failed = 0
+
+    for i, tc in enumerate(test_cases, 1):
+        print(f"\n{'─' * 60}")
+        print(f"[{i}/{len(test_cases)}] {tc['note']}")
+        print(f"Query:    '{tc['query']}'")
+        print(f"Expected: {tc['expected']}")
+ 
+        state = make_initial_state(tc["query"], customer_id="TEST")
+        result = orchestrator_node(state)
+ 
+        intent    = result.get("intent", "")
+        msg_count = len(result.get("messages", []))
+        matched   = intent == tc["expected"]
+ 
+        print(f"Got:      {intent}  {'✓ PASS' if matched else '✗ FAIL'}")
+        print(f"Messages written to state: {msg_count}")
+ 
+        # Simulate the routing function against the returned intent
+        merged_state = {**state, **result}
+        route = route_to_subagent(merged_state)
+        print(f"Router returns: '{route}'")
+ 
+        if matched:
+            passed += 1
+        else:
+            failed += 1
+ 
+    print(f"\n{'=' * 60}")
+    print(f"Results: {passed} passed, {failed} failed out of {len(test_cases)}")
+    if failed > 0:
+        print("\nAny failures on edge cases → document for Slide 5.")
+        print("Fix: add a few-shot example for the failing category to SYSTEM_PROMPT.")
+        print("Capture before + after terminal output as rubric evidence.")
+    print("=" * 60)

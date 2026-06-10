@@ -76,3 +76,44 @@ Rules:
 6. If the requested information is not available, direct the customer to call
    1300 555 100 or visit a branch.\
 """
+
+
+#TOOL FUNCTION
+def _load_mock_data() -> dict:
+    #Load mock data on JSON file. Called on every tool invocation
+    if not MOCK_DATA_PATH.exists():
+        raise FileNotFoundError(
+            f"Mock data not found at {MOCK_DATA_PATH}. "
+            "Check file path data/... and see if mock_accounts.json is there"
+        )
+    with open(MOCK_DATA_PATH) as f:
+        return json.load(f)
+    
+def get_account_balance(customer_id: str) -> dict:
+    # Returns current balances for all accounts belonging to the specific customer. 
+    # Account numbers masked and only last 4 digits shown as normal practice for financial institutions
+
+    data  = _load_mock_data()
+
+    # In really authenticated app environment, customer is already logged in so more of a system 
+    # lookup/ db failure.
+    if not customer_id:
+        return {"error": "No customer ID provided. Please log in to view account information."}
+    
+    if customer_id not in data:
+        return {"error": f"No accounts found for customer '{customer_id}'. Please verify your details."}
+    
+    customer = data[customer_id]
+    accounts = []
+    for acc in customer["accounts"]:
+        accounts.append({
+            "account_type":             acc["account_type"],
+            "account_number_last4":     acc["account_number"][-4:], # only last 4 digits
+            "balance":                  acc["balance"],
+            "currency":                 acc["currency"],
+        })
+
+    return {
+        "customer_name":    customer["customer_name"],
+        "accounts":         accounts,
+    }

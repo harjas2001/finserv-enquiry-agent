@@ -39,6 +39,10 @@ Gemini returns a tool call as a string name + args dict, e.g.:
     name = "get_account_balance", args = {"customer_id": "C001"}
 DISPATCH["get_account_balance"](**args) maps that string to the real function.
 This is the five-line version of what ToolNode did in Phase 1.
+
+TO FIX:
+- Have the customer id look up and error handling as a seperate code block so 
+you dont always have to call the config.
 """
 
 import json
@@ -116,4 +120,47 @@ def get_account_balance(customer_id: str) -> dict:
     return {
         "customer_name":    customer["customer_name"],
         "accounts":         accounts,
+    }
+
+def get_recent_transactions(customer_id: str, days: int= 30) -> dict:
+    """
+    Returns transactions from the last N days across all of the customer's accounts.
+ 
+    Transactions are sorted by date descending (most recent first).
+    The cutoff date is calculated from today's date at call time.
+    """
+
+    data = _load_mock_data()
+
+    if not customer_id:
+        return {"error": "No customer ID provided. Please log in to view transaction history."}
+    
+    if customer_id not in data:
+        return {"error": f"No accounts found for customer '{customer_id}'."}
+    
+    customer = data[customer_id]
+    cutoff = date.today() - timedelta(days=days)
+
+    all_transactions = []
+    for acc in customer["accounts"]:
+        for txn in acc.get("transactions, []"):
+            txn_date = date.fromisoformat(txn["date"])
+            if txn_date >= cutoff:
+                all_transactions.append({
+                    "date":                     txn["date"],
+                    "account_type":             acc["account_type"],
+                    "account_number_last4":     acc["account_number"][-4:],
+                    "description":              txn["description"],
+                    "amount":                   txn["amount"],
+                    "type":                     txn["type"], #credit or debit for example
+                })
+    
+    #Get most recent transaction:
+    all_transactions.sort(key=lambda x: x["date"], reverse=True)
+
+    return {
+        "customer_name":    customer["customer_name"],
+        "period_days":      days,
+        "transactions":     all_transactions,
+        "count":            len(all_transactions), #How many transactions you made in a given time period
     }

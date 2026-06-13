@@ -388,3 +388,212 @@ def complaint_node(state: EnquiryState) -> dict:
             "escalated": False,
             "error":     f"Complaint subagent failed: {e}",
         }
+
+
+#ROUTING FUNCTION: conditional edge after coomplaint node executes
+def route_after_complaint(state: EnquiryState) -> str:
+    """
+    Conditional edge function called after complaint_node.
+ 
+    Returns:
+        "escalate"  → state["escalated"] is True  → route to escalation_node
+        "continue"  → state["escalated"] is False → route to guardrail_node
+ 
+    graph.py usage:
+        graph.add_conditional_edges(
+            "complaint",
+            route_after_complaint,
+            {"escalate": "escalation", "continue": "guardrail"},
+        )
+    """
+    if state.get("escalated"):
+        print("[ROUTER] Complaint escalated -> escalation_node")
+        return "escalate"
+    print("[ROUTER] Complaint standard -> guardrail_node")
+    return "continue"
+
+
+#ESCALATION NODE: HITL interrupt
+def escalation_node(state: EnquiryState) -> dict:
+    """
+    Human-in-the-loop review for urgent complaints.
+ 
+    Calls LangGraph's interrupt() — this PAUSES the compiled graph and waits
+    for a human reviewer to resume it with Command(resume=<value>) Need to mimic
+    this in a UI type environemtn where agent would be. 
+    This only works when:
+      1. The graph is compiled with a checkpointer (e.g. MemorySaver)
+      2. It's invoked via graph.invoke()/.stream() — not by calling this
+         function directly.
+ 
+    Calling escalation_node(state) directly, as a plain Python function (as
+    this file's test harness does for complaint_node), will raise
+    GraphInterrupt, there's no checkpointer to pause against. This is
+    EXPECTED and is not a bug in this function. Full testing happens once
+    src/graph.py wires this in with add_conditional_edges() + a checkpointer.
+ 
+    The payload passed to interrupt() is what an agent sees, enough
+    context to approve, edit, or override the draft response without needing
+    to look anything else up. AI summary pretty much
+    """
+
+    review = interrupt({
+        "type":                 "complaint_escalation",
+        "case_sensitivity":     "urgent",
+        "customer_id":          state["customer_id"],
+        "query":                state["query"],
+        "draft_response":       state["subagent_response"],
+    })
+
+    return {
+        "subagent_response": review.get("approved_response", state["subagent_response"]),
+    }
+
+
+#TEST HARNESS
+# Stage A — pure Python tests (no API key needed):
+#   _apply_severity_override(), log_complaint(), route_after_complaint(),
+#   and a structural check on escalation_node.
+#
+# Stage B — live node tests (GOOGLE_API_KEY required):
+#   Runs complaint_node end-to-end for a standard complaint, a complaint that
+#   should trigger Gemini's own "urgent" classification, and a complaint
+#   designed to test the keyword override (mild tone, fraud-indicating word).
+ 
+if __name__ == "__main__":
+    from src.state import make_initial_state
+ 
+    # ── Stage A: pure Python tests ────────────────────────────────────────────
+    print("=" * 60)
+    print("STAGE A — Pure Python tests (no Gemini API needed)")
+    print("=" * 60)
+ 
+    # Reset the mock case store for a clean, reproducible run.
+    # This is mock data (like ChromaDB in Phase 2) — safe to reset each run.
+    print("\n[0] Resetting data/complaints.json to []")
+    _save_complaints([])
+    print(f"  ✓ Reset. Path: {COMPLAINTS_PATH}")
+ 
+    print("\n[1] _apply_severity_override — no fraud keywords")
+    result = _apply_severity_override(
+        description="Customer was charged a $35 monthly account fee they were not told about.",
+        query="Why was I charged a $35 fee?",
+        severity="standard",
+    )
+    assert result == "standard", f"Expected 'standard', got '{result}'"
+    print(f"  severity stays: '{result}'  ✓")
+ 
+    print("\n[2] _apply_severity_override — fraud keyword in description")
+    result = _apply_severity_override(
+        description="Customer reports an unauthorised transaction on their account.",
+        query="There's a charge I don't recognise.",
+        severity="standard",   # Gemini under-classified — override should catch this
+    )
+    assert result == "urgent", f"Expected 'urgent', got '{result}'"
+    print(f"  severity overridden to: '{result}'  ✓ (keyword: 'unauthorised')")
+ 
+    print("\n[3] log_complaint — standard complaint")
+    result = log_complaint(
+        description="Customer was charged a $35 monthly account fee they were not told about.",
+        category="fees",
+        severity="standard",
+        customer_id="C001",
+    )
+    assert result["case_id"] == "CW-2026-0001", f"Expected CW-2026-0001, got {result['case_id']}"
+    assert result["status"] == "logged"
+    print(f"  case_id:  {result['case_id']}")
+    print(f"  status:   {result['status']}")
+    print(f"  severity: {result['severity']}")
+    print("  ✓ Case created with sequential ID")
+ 
+    print("\n[4] log_complaint — second complaint gets next sequential ID")
+    result = log_complaint(
+        description="Customer reports an unauthorised transaction of $450.",
+        category="fraud",
+        severity="urgent",
+        customer_id="C002",
+    )
+    assert result["case_id"] == "CW-2026-0002", f"Expected CW-2026-0002, got {result['case_id']}"
+    print(f"  case_id: {result['case_id']}  ✓")
+ 
+    print("\n[5] Verify persisted file contents")
+    on_disk = _load_complaints()
+    assert len(on_disk) == 2
+    for record in on_disk:
+        print(f"  {record['case_id']}  {record['category']:20s} {record['severity']:8s} "
+              f"customer={record['customer_id']}")
+    print("  ✓ Both records persisted to data/complaints.json")
+ 
+    print("\n[6] route_after_complaint")
+    state = make_initial_state("test")
+    state["escalated"] = True
+    assert route_after_complaint(state) == "escalate"
+    print("  escalated=True  → 'escalate'  ✓")
+ 
+    state["escalated"] = False
+    assert route_after_complaint(state) == "continue"
+    print("  escalated=False → 'continue'  ✓")
+ 
+    print("\n[7] escalation_node — structural check only")
+    print("  escalation_node is defined and importable.")
+    print("  Calling it directly will raise GraphInterrupt (no checkpointer) —")
+    print("  this is EXPECTED. Full test deferred to src/graph.py wiring.")
+    assert callable(escalation_node)
+    print("  ✓ escalation_node is callable; full test deferred")
+ 
+    print("\n✓ All Stage A checks passed\n")
+ 
+    # ── Stage B: live node tests ──────────────────────────────────────────────
+    if not os.environ.get("GOOGLE_API_KEY"):
+        print("Stage B skipped — GOOGLE_API_KEY not set.")
+        sys.exit(0)
+ 
+    print("=" * 60)
+    print("STAGE B — Live node tests (Gemini API)")
+    print("=" * 60)
+ 
+    test_cases = [
+        {
+            "query":       "I was charged a $35 fee on my account that I was never told about. Please look into this.",
+            "customer_id": "C001",
+            "note":        "Standard complaint — expect category='fees', severity='standard', escalated=False",
+        },
+        {
+            "query":       "There is a transaction of $450 on my account that I never made — I think someone has accessed my account without my permission.",
+            "customer_id": "C002",
+            "note":        "Clear fraud — expect severity='urgent' from Gemini AND keyword override, escalated=True",
+        },
+        {
+            "query":       "I'm a bit confused, there's a transaction on my statement I don't remember making, can you check it?",
+            "customer_id": "C001",
+            "note":        "EDGE CASE — mild tone, no explicit 'fraud'/'unauthorised' wording. "
+                            "Tests whether Gemini still classifies appropriately without keyword trigger.",
+        },
+        {
+            "query":       "Your staff member at the Bondi branch was extremely rude to me yesterday and I want this noted.",
+            "customer_id": "C001",
+            "note":        "Service complaint — expect category='service', severity='standard'",
+        },
+    ]
+ 
+    for i, tc in enumerate(test_cases, 1):
+        print(f"\n{'─' * 60}")
+        print(f"[{i}/{len(test_cases)}] {tc['note']}")
+        print(f"Query:       '{tc['query']}'")
+        print(f"Customer ID: '{tc['customer_id']}'")
+ 
+        state  = make_initial_state(tc["query"], customer_id=tc["customer_id"])
+        result = complaint_node(state)
+ 
+        print(f"\nescalated: {result['escalated']}")
+        print(f"subagent_response:\n{result['subagent_response']}")
+        if result.get("error"):
+            print(f"error: {result['error']}")
+ 
+    print(f"\n{'=' * 60}")
+    print("Stage B complete.")
+    print(f"Final case store ({COMPLAINTS_PATH}):")
+    for record in _load_complaints():
+        print(f"  {record['case_id']}  {record['category']:20s} {record['severity']:8s} "
+              f"customer={record['customer_id']}  \"{record['description'][:60]}...\"")
+    print("=" * 60)

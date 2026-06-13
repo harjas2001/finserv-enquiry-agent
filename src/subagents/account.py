@@ -164,3 +164,67 @@ def get_recent_transactions(customer_id: str, days: int= 30) -> dict:
         "transactions":     all_transactions,
         "count":            len(all_transactions), #How many transactions you made in a given time period
     }
+
+
+#FUNCTION DECLERATIONS (what Gemini sees)
+# Each FunctionDeclaration is the schema Gemini reads to decide:
+#   (a) whether to call this tool at all, and
+#   (b) what arguments to fill in.
+#
+# The "description" fields are the most important part, Gemini reasons about
+# them in natural language.The "parameters" block is JSON Schema,
+# same structure as OpenAPI.
+
+_GET_BALANCE_DECL = types.FunctionDeclaration(
+    name="get_account_balance",
+    description=(
+        "Returns the current balance for all of the customer's accounts. "
+        "Use this when the customer asks about their balance, how much money "
+        "they have, or wants an overview of their accounts."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "customer_id": {
+                "type":         "string",
+                "description":  "The customer's unique ID (e.g. C001)",
+            }
+        },
+        "required": ["customer_id"],
+    },
+)
+
+_GET_TRANSACTION_DECL = types.FunctionDeclaration(
+    name="get_recent_transactions",
+    description=(
+        "Returns recent transactions for the customer across all accounts, "
+        "filtered to the last N days. Use this when the customer asks about "
+        "recent activity, spending, specific purchases, or transaction history."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "customer_id": {
+                "type":         "string",
+                "description":  "The customer's unique ID"
+            },
+            "days": {
+                "type":         "integer",
+                "description":  "Number of past days to unclude (default: 30).",
+            },
+        },
+        "required": ["customer_id"],
+    },
+)
+
+# Package declerations into a Tool object: passed to GenerateContentConfig
+ACCOUNT_TOOLS = types.Tool(function_declarations=[_GET_BALANCE_DECL, _GET_TRANSACTION_DECL])
+
+#Dispatch map
+# Gemini will returnn a tool name as a string, then map it to the python callable
+# function. Any name Gemini retunrs that isnt in the dict is ignored and silent fallback takeover
+
+DISPATCH: dict = {
+    "get_account_balance":      get_account_balance,
+    "get_recent_transactions":  get_recent_transactions,
+}

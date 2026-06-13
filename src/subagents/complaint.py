@@ -134,3 +134,117 @@ Rules:
 6. Keep responses concise and professional.\
 """
 
+
+# CASE STORE
+def _load_complaints() -> list:
+    #Load the mock case list from disk. If [] then file is empty.
+    if not COMPLAINTS_PATH.exists():
+        return []
+    with open(COMPLAINTS_PATH) as f:
+        content = f.read().strip()
+        return json.loads(content) if content else []
+    
+def _save_complaints(complaints: list) -> list:
+    #Persist full case list back to disk
+    with open(COMPLAINTS_PATH, "w") as f:
+        json.dump(complaints, f, indent=2)
+
+
+# SEVERITY OVERRIDE: defence-in-depth check
+def _apply_severity_override(description: str, query: str, severity: str) -> str:
+    #Return SEVERITY as "urgent" if geminis complaint summary or customer query
+    #have a keyword in them already in the list.Its a deterministic sub system, 
+    #to prevent LLM hallucination on this sensitive topic
+    text = f"{description} {query}".lower()
+    if any(keyword in text for keyword in FRAUD_KEYWORDS):
+        return "urgent"
+    return severity
+
+
+#TOOL FUNCTION
+def log_complaint(description: str, category: str, severity: str, customer_id: str) -> dict:
+    """
+    Creates a new complaint case record and persists it to data/complaints.json.
+ 
+    WRITES a new record: A side effect with a generated case_id, the same shape 
+    as calling a real case management API (Zendesk, Salesforce Service Cloud, etc.).
+ 
+    customer_id is injected by complaint_node from session state, never
+    supplied by Gemini. Same security principle as account.py: identity
+    parameters are never part of the tool's schema (same for FunctionDeclaration
+    below customer_id is not in `parameters`).
+ 
+    Returns a dict with the case_id, status, category, and final severity —
+    this is what Gemini sees in Turn 2 to compose its response.
+    """
+    complaints = _load_complaints()
+    case_id = f"CW-2026-{len(complaints) + 1:04d}"
+
+    record = {
+        "case_id":          case_id,
+        "customer_id":      customer_id,
+        "category":         category,
+        "severity":         severity,
+        "description":      description,
+        "status":           "open",
+        "logged_at":        datetime.now().isoformat(timespec="seconds")
+    }
+
+    complaints.append(record)
+    _save_complaints(complaints)
+
+    return {
+        "case_id":  case_id,
+        "status":   "logged", #different to "open" one-time confirmation to gemini
+        "category": category,
+        "severity": severity,
+    }
+
+
+#FUNCTION DECLERATION
+#customer_id cant be suuplied as a paramter value like other sub agents so gemini llm doesnt have any
+#exposure and hallucinated risk towards it
+
+_LOG_COMPLAINT_DECL = types.FunctionDeclaration(
+    name="log_complaint",
+    description=(
+        "Logs a customer complaint into Clearwater Bank's case management "
+        "system and returns a case reference number. Call this for every "
+        "complaint, extract a clear, factual summary even if the customer's "
+        "description is vague or emotional."
+    ),
+    parameters= {
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string",
+                "description": (
+                    "A concise, factual, third-person summary of the complaint. "
+                    "Example: 'Customer reports an unauthorised transaction of "
+                    "$450 on their everyday account.'"
+                ),
+            },
+            "category": {
+                "type": "string",
+                "enum": ["fees", "service", "transaction_dispute", "fraud", "other"],
+                "description": "The category that best matches the complaint.",
+            },
+            "severity": {
+                "type": "string",
+                "enum": ["standard", "urgent"],
+                "description": (
+                    "'urgent' if the complaint involves suspected fraud, "
+                    "unauthorised transactions, identity theft, threats of "
+                    "legal action, or significant financial harm. 'standard' "
+                    "for general service or fee complaints."
+                ),
+            },
+        },
+        "required": ["description", "category", "severity"],
+    },
+)
+
+COMPLAINT_TOOLS = types.Tool(function_declarations=[_LOG_COMPLAINT_DECL])
+DISPATCH: dict = {
+    "log_complaint": log_complaint,
+}

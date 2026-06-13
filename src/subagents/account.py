@@ -143,7 +143,7 @@ def get_recent_transactions(customer_id: str, days: int= 30) -> dict:
 
     all_transactions = []
     for acc in customer["accounts"]:
-        for txn in acc.get("transactions, []"):
+        for txn in acc.get("transactions", []):
             txn_date = date.fromisoformat(txn["date"])
             if txn_date >= cutoff:
                 all_transactions.append({
@@ -228,3 +228,129 @@ DISPATCH: dict = {
     "get_account_balance":      get_account_balance,
     "get_recent_transactions":  get_recent_transactions,
 }
+
+
+#ACCOUNT NODE
+def account_node(state: EnquiryState) -> dict:
+    """
+    LangGraph node — answers account enquiries via two-turn function calling.
+    Reads from state:  query, customer_id
+    Writes to state:   subagent_response, sources, escalated
+ 
+    Two-turn flow:
+        Turn 1 → Gemini + tools → FunctionCall (or direct answer)
+        Execute → Python function → result dict
+        Turn 2 → Gemini + result → natural language answer    
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise EnvironmentError("Google API not set.")
+    
+    query =         state["query"]
+    customer_id =   state["customer_id"]
+
+    print(f"\n[ACCOUNT] Query: '{query[:80]}'")
+    print(f"[ACCOUNT] Customer ID: '{customer_id}'")
+
+    try:
+        client = genai.Client(api_key=api_key)
+
+        #TURN 1: ask Gemini which tool to use
+        print("[ACCOUNT] Turn 1: sending user query + tool decleration to Gemini")
+        response1 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            content=query,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                tools=[ACCOUNT_TOOLS],
+                temperature=0,
+            ),
+        )
+
+        # Gemini will return a string and we need to find the function call part
+        # e.g.will be a text part + function_call part. set up code to scall all
+        # and take the first function call found.
+        function_call = None
+        for part in response1.candidates[0].content.parts:
+            fc = getattr(part, "function_call", None)
+            if fc and fc.name:
+                function_call = fc
+                break
+        # If Gemini answered without tool call as query was too vague then return 
+        # answer as it is.
+        if function_call is None:
+            print("[ACCOUNT] Gemini answered directly (no tool call)")
+            return {
+                "subagent response":    response1.text.strip(),
+                "sources":              [],
+                "escalated":            False,
+            }
+        
+        print(f"[ACCOUNT] Gemini requested tool: {function_call.name}({dict(function_call.args)})")
+        
+        #Execute tool
+        tool_args = dict(function_call.args) #dict() converts the proto MapComposite to a plain python dict to unpack the keyword tools
+
+        #Inject customer_id as userquery doesnt mention it
+        if "customer_id" not in tool_args or not tool_args["customer_id"]:
+            tool_args["customer_id"] = customer_id
+
+        if function_call.name not in DISPATCH:
+            raise ValueError(f"Unknown tool requested: '{function_call.name}'")
+        
+        tool_result = DISPATCH[function_call.name](**tool_args)
+        print(f"[ACCOUNT] tool result: {json.dumps(tool_result)[:120]}...")
+
+
+        #TURN 2: send tool result back and get natural language with Gemini
+        # Reconstruct the full conversation so Gemini has context:
+        #   user turn:     the original query
+        #   model turn:    Gemini's function call (response1's content)
+        #   user turn:     the tool result (FunctionResponse part)
+        # Gemini then composes a final answer grounded in the real account data.
+
+        print("[ACCOUNT] Turn 2: sending tool result back to Gemini")
+        response2 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=query)],
+                ),
+                response1.candidate[0].content, #Model function call
+                types.Content(
+                    role="user",
+                    parts=[types.Part(
+                        function_response=types.FunctionResponse(
+                            name=function_call.name,
+                            respons=tool_result, #plain dict
+                        )
+                    )],
+                ),
+            ],
+            config = types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0,
+            ),
+        )
+
+        final_answer = response2.text.strip()
+        print(f"[ACCOUNT] Final answer: '{final_answer[:100]}...")
+
+        return {
+            "subagent_response":    final_answer,
+            "sources":              [], #not RAG
+            "escalated":            False,
+        }
+
+    except Exception as e:
+        print(f"[ACCOUNT] ERROR: {type(e).__name__}: {e}")
+        return {
+            "subagent_response": (
+                "I'm unable to retrieve your account information right now. "
+                "Please call us on 1300 555 100 or try again shortly "
+            ),
+            "sources":      [],
+            "escalated":    False,
+            "error":        f"Account subagent failed {e}",
+        }

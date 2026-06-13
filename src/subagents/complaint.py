@@ -33,7 +33,7 @@ data/complaints.json, a case ID generated). This is the same shape as a real
 Service Cloud, etc.) — the mock just uses a JSON file instead of a database.
  
 Same two-turn pattern as account.py:
-  Turn 1 (forced, mode="ANY") → Gemini extracts a complaint summary, category,
+  Turn 1 (forced, mode="ANY") → `Gemini` extracts a complaint summary, category,
                                   and severity, and calls log_complaint
   Execute                     → write the case record, return a case_id
   Turn 2                      → Gemini composes the acknowledgement to the
@@ -248,3 +248,143 @@ COMPLAINT_TOOLS = types.Tool(function_declarations=[_LOG_COMPLAINT_DECL])
 DISPATCH: dict = {
     "log_complaint": log_complaint,
 }
+
+
+#COMPLAINT NODE
+
+def complaint_node(state: EnquiryState) -> dict:
+    """
+    Main action point for complaint node:
+    LangGraph node: logs the complaint via two-turn function calling and
+    classifies its severity.
+ 
+    Reads from state:  query, customer_id
+    Writes to state:   subagent_response, sources, escalated
+ 
+    escalated=True means route_after_complaint() will send this enquiry to
+    escalation_node for human review before the guardrail layer.
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise EnvironmentError("GOOGLE_API_KEY is not set.")
+ 
+    query       = state["query"]
+    customer_id = state["customer_id"]
+ 
+    print(f"\n[COMPLAINT] Query: '{query[:80]}'")
+    print(f"[COMPLAINT] Customer ID: '{customer_id}'")
+
+    try:
+        client = genai.Client(api_key=api_key)
+
+        # Turn 1: sending query + tool decleration to Gemini (forced)
+        print("[COMPLAINT] Turn 1: sending query + tool declaration to Gemini (forced)")
+        response1 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=query,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                tools=[COMPLAINT_TOOLS],
+                tool_config=types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(mode="ANY")
+                ),
+                temperature=0,
+            ),
+        )
+
+        function_call = None
+        for part in response1.candidates[0].content.parts:
+            fc = getattr(part, "function_call", None)
+            if fc and fc.name:
+                function_call = fc
+                break
+
+        #fallback incase no fc found which probably wont happen given tool_call is set to mode="ANY"
+        #forcing Gemini to call a function
+        if function_call is None:
+            print("[COMPLAINT] Gemini answered directly (no tool call) — unexpected")
+            return {
+                "subagent_response": response1.text.strip(),
+                "sources":           [],
+                "escalated":         False,
+            }
+        
+
+        tool_args = dict(function_call.args)
+        gemini_severity = tool_args.get("severity", "standard")
+        print(f"[COMPLAINT] Gemini classified: category='{tool_args.get('category')}', "
+              f"severity='{gemini_severity}'")
+        print(f"[COMPLAINT] Description: '{tool_args.get('description', '')}'")
+
+        #Defence-in-depth severity overide
+        final_severity = _apply_severity_override(
+            description=str(tool_args.get("description", "")),
+            query=query,
+            severity=gemini_severity,
+        )
+        if final_severity != gemini_severity:
+            print(f"[COMPLAINT] Keyword override — severity '{gemini_severity}' → "
+                  f"'{final_severity}' (fraud-related language detected)")
+        tool_args["severity"] = final_severity
+
+        #Apply customer id to session statem no gemini involvement.
+        tool_args["customer_id"] = customer_id  
+
+        if function_call.name not in DISPATCH:
+            raise ValueError(f"Unknown tool requested: '{function_call.name}'")      
+
+        #Execute the tool: creating the case record in complaints.json
+        tool_result = DISPATCH[function_call.name](**tool_args)
+        print(f"[COMPLAINT] Case logged: {tool_result}")
+
+        #TURN 2: customer facing acknowledgmement of complaint
+        print("[COMPLAINT] Turn 2 — sending case result back to Gemini")
+        response2 = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part(text=query)],
+                ),
+                response1.candidates[0].content,
+                types.Content(
+                    role="user",
+                    parts=[types.Part(
+                        function_response=types.FunctionResponse(
+                            name=function_call.name,
+                            response=tool_result,
+                        )
+                    )],
+                ),
+            ],
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0,
+            ),
+        )
+
+        final_answer = response2.text.strip()
+        escalated = tool_result["severity"] == "urgent"
+        print(f"[COMPLAINT] Final answer: '{final_answer[:100]}...'")
+        print(f"[COMPLAINT] escalated = {escalated}")
+
+        return {
+            "subagent_response":    final_answer,
+            "sources":              [],
+            "escalated":            escalated,
+        }
+
+
+
+
+    except Exception as e:
+        print(f"[COMPLAINT] ERROR: {type(e).__name__}: {e}")
+        return {
+            "subagent_response": (
+                "I'm unable to log your complaint right now. Please call us "
+                "on 1300 555 100 so we can assist you directly."
+            ),
+            "sources":   [],
+            "escalated": False,
+            "error":     f"Complaint subagent failed: {e}",
+        }

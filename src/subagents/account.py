@@ -78,7 +78,11 @@ Rules:
 4. Keep responses concise, accurate, and professional.
 5. Do not provide financial advice or investment recommendations.
 6. If the requested information is not available, direct the customer to call
-   1300 555 100 or visit a branch.\
+   1300 555 100 or visit a branch.
+7. If a tool result contains an "error" field (for example, the customer is
+   not identified), do not attempt to answer the original question. Instead,
+   explain that you're unable to verify their identity and direct them to log
+   in or call 1300 555 100. Never substitute a different customer's data.\
 """
 
 
@@ -180,17 +184,13 @@ _GET_BALANCE_DECL = types.FunctionDeclaration(
     description=(
         "Returns the current balance for all of the customer's accounts. "
         "Use this when the customer asks about their balance, how much money "
-        "they have, or wants an overview of their accounts."
+        "they have, or wants an overview of their accounts. "
+        "Takes no parameters, the customer is identified automatically from "
+        "the authenticated session."
     ),
     parameters={
         "type": "object",
-        "properties": {
-            "customer_id": {
-                "type":         "string",
-                "description":  "The customer's unique ID (e.g. C001)",
-            }
-        },
-        "required": ["customer_id"],
+        "properties": {},
     },
 )
 
@@ -199,21 +199,18 @@ _GET_TRANSACTION_DECL = types.FunctionDeclaration(
     description=(
         "Returns recent transactions for the customer across all accounts, "
         "filtered to the last N days. Use this when the customer asks about "
-        "recent activity, spending, specific purchases, or transaction history."
+        "recent activity, spending, specific purchases, or transaction history. "
+        "The customer is identified automatically from the authenticated "
+        "session, do not ask for or include a customer ID."
     ),
     parameters={
         "type": "object",
         "properties": {
-            "customer_id": {
-                "type":         "string",
-                "description":  "The customer's unique ID"
-            },
             "days": {
                 "type":         "integer",
                 "description":  "Number of past days to unclude (default: 30).",
             },
         },
-        "required": ["customer_id"],
     },
 )
 
@@ -294,9 +291,12 @@ def account_node(state: EnquiryState) -> dict:
         #Execute tool
         tool_args = dict(function_call.args) #dict() converts the proto MapComposite to a plain python dict to unpack the keyword tools
 
-        #Inject customer_id as userquery doesnt mention it
-        if "customer_id" not in tool_args or not tool_args["customer_id"]:
-            tool_args["customer_id"] = customer_id
+        # Inject customer_id from session state: UNCONDITIONALLY.
+        # customer_id is no longer in either function declaration's schema
+        # so function_call.args will never contain it. This line is the 
+        # single point where identity enters the tool call, and it always 
+        # comes from the authenticated session, never from the model's output.
+        tool_args["customer_id"] = customer_id
 
         if function_call.name not in DISPATCH:
             raise ValueError(f"Unknown tool requested: '{function_call.name}'")

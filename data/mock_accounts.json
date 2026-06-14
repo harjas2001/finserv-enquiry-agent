@@ -1,0 +1,60 @@
+{
+  "C001": {
+    "customer_name": "Alex Johnson",
+    "accounts": [
+      {
+        "account_id": "SAV-4521",
+        "account_type": "Clearwater Bonus Saver",
+        "account_number": "102934521",
+        "bsb": "062-001",
+        "balance": 4823.17,
+        "currency": "AUD",
+        "transactions": [
+          {"date": "2026-06-09", "description": "Salary credit — Clearwater Corp",    "amount":  3200.00, "type": "credit"},
+          {"date": "2026-06-06", "description": "Woolworths Bondi Junction",            "amount":   -87.45, "type": "debit"},
+          {"date": "2026-06-04", "description": "Netflix Australia",                    "amount":   -22.99, "type": "debit"},
+          {"date": "2026-06-01", "description": "Monthly interest payment",             "amount":    12.50, "type": "credit"},
+          {"date": "2026-05-28", "description": "Rent — 42 Harbour St",                "amount": -1800.00, "type": "debit"},
+          {"date": "2026-05-15", "description": "Transfer from Everyday Account",       "amount":   500.00, "type": "credit"},
+          {"date": "2026-04-30", "description": "Salary credit — Clearwater Corp",      "amount":  3200.00, "type": "credit"}
+        ]
+      },
+      {
+        "account_id": "CHQ-8832",
+        "account_type": "Clearwater Everyday Account",
+        "account_number": "209418832",
+        "bsb": "062-001",
+        "balance": 1247.83,
+        "currency": "AUD",
+        "transactions": [
+          {"date": "2026-06-08", "description": "BP Petrol Station",                   "amount":   -65.20, "type": "debit"},
+          {"date": "2026-06-07", "description": "Single O Coffee Rosebery",             "amount":    -5.80, "type": "debit"},
+          {"date": "2026-06-05", "description": "Sydney Water quarterly bill",          "amount":  -145.30, "type": "debit"},
+          {"date": "2026-05-25", "description": "Transfer to Bonus Saver",              "amount":  -500.00, "type": "debit"},
+          {"date": "2026-05-20", "description": "Anytime Fitness monthly fee",          "amount":   -49.99, "type": "debit"},
+          {"date": "2026-04-28", "description": "Telstra monthly plan",                 "amount":   -49.00, "type": "debit"}
+        ]
+      }
+    ]
+  },
+  "C002": {
+    "customer_name": "Jordan Lee",
+    "accounts": [
+      {
+        "account_id": "CHQ-2267",
+        "account_type": "Clearwater Everyday Account",
+        "account_number": "304512267",
+        "bsb": "062-001",
+        "balance": 892.44,
+        "currency": "AUD",
+        "transactions": [
+          {"date": "2026-06-10", "description": "Salary credit — Lee Consulting",       "amount":  2450.00, "type": "credit"},
+          {"date": "2026-06-08", "description": "Coles Supermarket",                    "amount":   -92.30, "type": "debit"},
+          {"date": "2026-06-05", "description": "Pasta Mia Restaurant",                 "amount":   -48.50, "type": "debit"},
+          {"date": "2026-05-30", "description": "NRMA Insurance premium",               "amount":  -187.00, "type": "debit"},
+          {"date": "2026-05-22", "description": "ATM withdrawal",                       "amount":  -200.00, "type": "debit"}
+        ]
+      }
+    ]
+  }
+}

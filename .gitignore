@@ -221,3 +221,4 @@ __marimo__/
 *.db
 data/knowledge_base/*
 data/chroma_db/*
+data/complaints.json

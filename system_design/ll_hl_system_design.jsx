@@ -1,3 +1,4 @@
+{/* Use JSX Artifact Preview extension to visualise system design: Ctr+Cmd+V */}
 import { useState } from "react";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────

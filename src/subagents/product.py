@@ -26,6 +26,7 @@ from google import genai
 from google.genai import types
 
 from src.rag.retriever import format_context, retrieve_with_scores
+from src.state import EnquiryState
 
 load_dotenv()
 
@@ -39,7 +40,7 @@ load_dotenv()
 # Anything above 0.80 means no useful context was found — deflect rather than guess.
 RELEVANCE_THRESHOLD = 0.80
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ GEMINI_MODEL = "gemini-2.5-flash"
 #
 # Prompt engineering evidence (Slide 5):
 # The test harness below runs the same query with and without this instruction.
-# Without it, Gemini answers from training data — rates will be generic or wrong.
+# Without it, Gemini answers from training data, rates will be generic or wrong.
 # With it, responses are grounded in Clearwater Bank's actual product guides.
 # Screenshot both outputs for the before/after comparison required for the rubric.
 
@@ -71,14 +72,14 @@ RULES:
 5. Keep responses concise and professional.\
 """
 
-# Without grounding — used only to capture hallucination evidence for Slide 5.
+# Without grounding: used only to capture hallucination evidence for Slide 5.
 SYSTEM_PROMPT_NO_GROUNDING = """\
 You are a helpful banking assistant for Clearwater Bank.
 Answer the customer's question about our products helpfully and in detail.\
 """
 
 
-# ── Core subagent ─────────────────────────────────────────────────────────────
+# ---Core subagent---
 
 def answer_product_query(query: str, use_grounding: bool = True) -> dict:
     """
@@ -165,6 +166,34 @@ Answer using only the context above.\
         "grounded": True,
         "score": top_score,
     }
+
+
+#STATE WRAPPER
+def product_node(state: EnquiryState) -> dict:
+    """
+    LangGraph node: thin wrapper around answer_product_query().
+ 
+    Graph position:
+        orchestrator_node → (intent="product") → product_node → guardrail_node
+ 
+    Reads from state:  query
+    Writes to state:   subagent_response, sources, escalated
+    """
+    query = state["query"]
+    print(f"\n[PRODUCT] Query: '{query[:80]}'")
+
+    result = answer_product_query(query,use_grounding=True)
+
+    status = "GROUNDED" if result["grounded"] else "DEFLECTED (out-of-scope)"
+    print(f"[PRODUCT] {status} | score={result['score']:.4f} | sources={result['sources']}")
+
+    return {
+        "subagent_response":    result["answer"],
+        "sources":              result["sources"],
+        "escalated":            False,
+    }
+
+
 
 
 # ── Test harness ──────────────────────────────────────────────────────────────

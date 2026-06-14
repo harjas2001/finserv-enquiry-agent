@@ -61,7 +61,7 @@ load_dotenv()
 
 
 #CONFIG
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 MOCK_DATA_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "mock_accounts.json"
 
 SYSTEM_PROMPT = """\

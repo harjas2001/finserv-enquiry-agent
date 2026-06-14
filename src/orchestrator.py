@@ -71,8 +71,13 @@ Classify the customer query into exactly one of these four categories:
  
 Rules:
   - If the query fits multiple categories, choose the most specific one.
-    Example: "Why has my savings bonus rate disappeared?" → complaint (not product),
+    Example 1: "Why has my savings bonus rate disappeared?" → complaint (not product),
     because the customer is expressing dissatisfaction, not asking how the rate works.
+    Example 2: "There's a transaction on my account I never made" → complaint (not account),
+    because the customer is reporting suspected fraud or unauthorized activity, not
+    simply asking to view their account data. Any mention of "never made", "didn't
+    authorise", or "someone accessed my account" signals complaint, even if the
+    query also mentions an account or transaction.
   - If the query is vague, ambiguous, or does not fit clearly, choose out_of_scope.
   - Reply with ONLY the category name — no punctuation, no explanation, no other text.\
 """

@@ -40,7 +40,7 @@ load_dotenv()
 # Anything above 0.80 means no useful context was found — deflect rather than guess.
 RELEVANCE_THRESHOLD = 0.80
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────

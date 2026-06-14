@@ -87,7 +87,7 @@ load_dotenv()
 
 
 #CONFIG
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
  
 # Resolved relative to this file: src/subagents/complaint.py
 COMPLAINTS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "complaints.json"

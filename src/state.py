@@ -46,6 +46,7 @@ Field ownership
 │ guardrail_flags      │ Guardrail node                                      │
 │ final_response       │ Guardrail node                                      │
 │ error                │ Any node on unhandled failure                       │
+│ allow_retry          │ re-prompt on deflector agent turn1                  │
 └──────────────────────┴─────────────────────────────────────────────────────┘
 """
 
@@ -145,6 +146,22 @@ class EnquiryState(TypedDict):
     FastAPI checks this: if non-empty, return HTTP 500 with the error message.
     Keeping error propagation explicit (as a state field) rather than relying
     on Python exceptions makes failures visible across the graph boundary."""
+
+    #---Retry signal---
+    allow_retry: bool
+    """True when the deflector subagent handles a query.
+    Signals the API layer that the session should remain open and the
+    frontend should present a re-prompt invitation to the user.
+ 
+    How retry works (stateless per-request design):
+        The graph ends normally — there is no loop inside the graph.
+        The API layer reads this flag from the final state and includes it
+        in the HTTP response payload. The channel (frontend / contact centre
+        platform) keeps the session alive and waits for the user's next
+        message. That next message is a fresh graph.invoke() call, a new
+        enquiry, same customer_id.
+ 
+    Default: False. Only the deflector_node sets this to True."""    
     
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -184,7 +201,8 @@ def make_initial_state(query: str, customer_id: str = "") -> EnquiryState:
         "escalated":                False,
         "guardrail_flags":          {},
         "final_response":           "",
-        "error":                    ""
+        "error":                    "",
+        "allow_retry":              False,
     }
 
 

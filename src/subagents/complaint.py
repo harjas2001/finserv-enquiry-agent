@@ -451,11 +451,11 @@ def escalation_node(state: EnquiryState) -> dict:
 
 
 #TEST HARNESS
-# Stage A — pure Python tests (no API key needed):
+# Stage A: pure Python tests (no API key needed):
 #   _apply_severity_override(), log_complaint(), route_after_complaint(),
 #   and a structural check on escalation_node.
 #
-# Stage B — live node tests (GOOGLE_API_KEY required):
+# Stage B: live node tests (GOOGLE_API_KEY required):
 #   Runs complaint_node end-to-end for a standard complaint, a complaint that
 #   should trigger Gemini's own "urgent" classification, and a complaint
 #   designed to test the keyword override (mild tone, fraud-indicating word).

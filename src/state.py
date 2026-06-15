@@ -42,6 +42,7 @@ Field ownership
 │ messages             │ Orchestrator node (add_messages reducer)            │
 │ subagent_response    │ Whichever subagent node wins routing                │
 │ sources              │ Product RAG subagent; others return []              │
+│ retrieved_chunks     │ Product RAG subagent; others return []              │
 │ escalated            │ Complaint subagent                                  │
 │ guardrail_flags      │ Guardrail node                                      │
 │ final_response       │ Guardrail node                                      │
@@ -115,6 +116,15 @@ class EnquiryState(TypedDict):
     Example: ["home_loan_guide.pdf", "borrowing_guide.pdf"]
     All other subagents return [] — the guardrail node checks this to determine
     whether a hallucination check is applicable (only meaningful for RAG output)."""
+
+    #---Guardrail-chunks---
+    retrieved_chunks: list[str]
+    """Raw text content of the chunks retrieved from ChromaDB.
+    Populated only by the product RAG subagent alongside `sources`.
+    Used by the guardrail node's hallucination check, it compares key terms
+    from these chunks against the subagent_response to verify grounding.
+    All other subagents return [] (no retrieval was performed).
+    Not sent to the customer — internal pipeline data only."""
 
     #---Complaint-specific---
     escalated: bool
@@ -198,6 +208,7 @@ def make_initial_state(query: str, customer_id: str = "") -> EnquiryState:
         "messages":                 [],
         "subagent_response":        "",
         "sources":                  [],
+        "retrieved_chunk":          [],
         "escalated":                False,
         "guardrail_flags":          {},
         "final_response":           "",

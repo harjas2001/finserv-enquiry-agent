@@ -120,9 +120,9 @@ _STOPWORDS = {
 def _check_pii(text: str) -> tuple[bool, str]:
     #Scan for Aus banking PII patterns
     if _BSB_RE.search(text):
-        return True
+        return True, "BSB number pattern detected"
     if _ACC_RE.search(text):
-        return True
+        return True, "account number pattern detected"
     return False, ""
 
 def _redact_pii(text: str) -> str:
@@ -218,3 +218,170 @@ def guardrail_node(state: EnquiryState) -> dict:
         compliance event than generating advice language. Both firing simultaneously
         is extremely unlikely in practice.
     """
+    
+    response    = state["subagent_response"]
+    sources     = state["sources"]
+    chunks      = state["retrieved_chunks"]
+
+    flags = {
+        "pii_detected":         False,
+        "hallucination_risk":   False,
+        "out_of_scope":         False,
+    }  
+
+    #Default: pass subagent response as is
+    final = response
+
+    #In order of HIERARCHY
+    #Check3: Scope
+    if _check_scope(response):
+        flags["out_of_scope"] = True
+        final = _SCOPE_FALLBACK
+        print("[GUARDRAIL] ⚠  Scope violation — financial advice language detected")
+    
+    #Check1: PII
+    pii_flagged, pii_reason = _check_pii(response)
+    if pii_flagged:
+        flags["pii_detected"] = True,
+        final = _redact_pii(final)
+        print(f"[GUARDRAIL] ⚠  PII detected ({pii_reason}) — redacted in-place")
+
+    #Check2: Hallucination
+    if sources:
+        if _check_hallucination(response, chunks):
+            flags["hallucination_risk"] = True
+            print("[GUARDRAIL] ⚠  Hallucination risk — low term overlap with retrieved chunks")
+
+    
+    #log clean pass
+    if not any(flags.values()):
+        print("[GUARDRAIL] ✓  All checks passed — response cleared")
+
+    return {
+        "final_response":   final,
+        "guardrail_flags":  flags,
+    }
+
+
+# STAGE A TEST HARNESS
+# Tests each private checker function independently (pure Python — no LangGraph,
+# no Gemini). Same Stage A pattern used throughout Phase 3.
+# Stage B is python -m src.graph.
+ 
+if __name__ == "__main__":
+    import sys
+ 
+    print("=" * 60)
+    print("GUARDRAIL — Stage A test harness (pure Python)")
+    print("=" * 60)
+ 
+    failures = []
+ 
+    # ── PII tests ─────────────────────────────────────────────────────────────
+    print("\n[1] PII detector")
+ 
+    
+ 
+    # ── Scope tests ───────────────────────────────────────────────────────────
+    print("\n[2] Scope check")
+ 
+    pii_cases = [
+        # (text, should_flag, expected_output_contains, label)
+        (
+            "Your BSB is 012-003 and your account is ready.",
+            True, "[BSB REDACTED]",
+            "BSB with hyphen",
+        ),
+        (
+            "Your account number is 123456789.",
+            True, "****6789",
+            "9-digit account number → masked to last 4",
+        ),
+        (
+            "Your balance is $4,823.17.",
+            False, "$4,823.17",
+            "Dollar amount — not PII",
+        ),
+        (
+            "Call us on 1300 555 100 for assistance.",
+            False, "1300 555 100",
+            "Phone with spaces — not PII",
+        ),
+        (
+            "No sensitive data in this response.",
+            False, "No sensitive data",
+            "Clean response",
+        ),
+    ]
+
+    for text, should_flag, expected_fragment, label in pii_cases:
+        flagged, reason = _check_pii(text)
+        output = _redact_pii(text) if flagged else text
+        ok = (flagged == should_flag) and (expected_fragment in output)
+        if not ok:
+            failures.append(f"PII [{label}]: flagged={flagged}, output={output!r}")
+        detail = f"→ {output!r}" if flagged else ""
+        print(f"  {'✓' if ok else '✗'} {label}: flagged={flagged} {detail}")
+ 
+    # ── Hallucination tests ───────────────────────────────────────────────────
+    print("\n[3] Hallucination check")
+ 
+    sample_chunk = (
+        "The variable interest rate on our ClearHome Standard home loan is 6.54% p.a. "
+        "comparison rate 6.78% including offset account features and redraw facility."
+    )
+    grounded     = (
+        "Clearwater's variable rate home loan is currently 6.54% p.a. with a comparison "
+        "rate of 6.78%. Features include an offset account and redraw facility."
+    )
+    hallucinated = (
+        "Our home loan rates are highly competitive. We offer some of the best rates in "
+        "the market with flexible repayment options to suit your individual needs."
+    )
+ 
+    hal_cases = [
+        (grounded,     [sample_chunk], False, "Grounded response — should NOT flag"),
+        (hallucinated, [sample_chunk], True,  "Generic response — should flag"),
+        (grounded,     [],             False, "No chunks (non-RAG) — should NOT flag"),
+    ]
+ 
+    for response, chunks, should_flag, label in hal_cases:
+        flagged = _check_hallucination(response, chunks)
+        ok = flagged == should_flag
+        if not ok:
+            failures.append(f"Hallucination [{label}]: expected {should_flag}, got {flagged}")
+        print(f"  {'✓' if ok else '✗'} {label}: flagged={flagged}")
+ 
+    # ── guardrail_node integration ────────────────────────────────────────────
+    print("\n[4] guardrail_node — mock state (clean response)")
+ 
+    from src.state import make_initial_state
+ 
+    mock_state = make_initial_state("What is the home loan rate?")
+    mock_state["subagent_response"] = "The variable rate is 6.54% p.a. with an offset account facility."
+    mock_state["sources"]           = ["home_loan_guide.pdf"]
+    mock_state["retrieved_chunks"]  = [sample_chunk]
+ 
+    result = guardrail_node(mock_state)
+    node_ok = (
+        result["final_response"]              == mock_state["subagent_response"]
+        and result["guardrail_flags"]["pii_detected"]       == False
+        and result["guardrail_flags"]["hallucination_risk"] == False
+        and result["guardrail_flags"]["out_of_scope"]       == False
+    )
+    if not node_ok:
+        failures.append("guardrail_node: clean response should pass all checks unchanged")
+    print(f"  {'✓' if node_ok else '✗'} Clean RAG response passes all checks")
+    print(f"    final_response  = {result['final_response']!r}")
+    print(f"    guardrail_flags = {result['guardrail_flags']}")
+ 
+    # ── Summary ───────────────────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    if failures:
+        print(f"✗ {len(failures)} test(s) FAILED:")
+        for f in failures:
+            print(f"  • {f}")
+        sys.exit(1)
+    else:
+        print("✓ All Stage A tests passed.")
+    print("=" * 60)

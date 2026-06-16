@@ -1,0 +1,182 @@
+[
+  {
+    "id": "TC-001",
+    "input": "What is my current account balance?",
+    "customer_id": "C001",
+    "expected_intent": "account",
+    "expected_answer_contains": ["4,823", "1,247", "Bonus Saver", "AUD"],
+    "hitl_expected": false,
+    "notes": "C001 has two accounts. Both balances must appear — Bonus Saver $4,823.17 and Everyday $1,247.83."
+  },
+  {
+    "id": "TC-002",
+    "input": "Show me my recent transactions from the last 14 days",
+    "customer_id": "C001",
+    "expected_intent": "account",
+    "expected_answer_contains": ["Woolworths", "Netflix", "AUD"],
+    "hitl_expected": false,
+    "notes": "Woolworths (Jun 6) and Netflix (Jun 4) are both within 14 days. Tests days parameter on get_recent_transactions."
+  },
+  {
+    "id": "TC-003",
+    "input": "What is my balance?",
+    "customer_id": "C002",
+    "expected_intent": "account",
+    "expected_answer_contains": ["892", "Jordan Lee", "AUD"],
+    "hitl_expected": false,
+    "notes": "C002 has one account — Clearwater Everyday Account $892.44. Tests a different customer."
+  },
+  {
+    "id": "TC-004",
+    "input": "Can you show me my recent spending?",
+    "customer_id": "C002",
+    "expected_intent": "account",
+    "expected_answer_contains": ["Coles", "AUD"],
+    "hitl_expected": false,
+    "notes": "C002 transactions include Coles Supermarket (Jun 8). 'Spending' is a soft synonym for transactions — tests orchestrator and subagent paraphrase handling."
+  },
+  {
+    "id": "TC-005",
+    "input": "What is my account balance?",
+    "customer_id": "",
+    "expected_intent": "account",
+    "expected_answer_contains": ["1300 555 100"],
+    "hitl_expected": false,
+    "notes": "No customer ID supplied. get_account_balance returns an error dict. Gemini must redirect to the help line — not fabricate data. Account numbers must never appear."
+  },
+  {
+    "id": "TC-006",
+    "input": "What are your current home loan interest rates?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["6.54", "variable", "home loan"],
+    "hitl_expected": false,
+    "notes": "Core RAG case. Rate grounded from home_loan_guide.pdf. 6.54% p.a. confirmed in Phase 2 retrieval tests."
+  },
+  {
+    "id": "TC-007",
+    "input": "Can I make extra repayments on my personal loan without being penalised?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["repayment", "personal loan"],
+    "hitl_expected": false,
+    "notes": "Grounded from personal_loan_facts.pdf. Tests a different PDF from TC-006."
+  },
+  {
+    "id": "TC-008",
+    "input": "How do I earn the bonus interest rate on my savings account?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["bonus", "savings"],
+    "hitl_expected": false,
+    "notes": "Grounded from savings_account_summary.pdf. 'My savings account' has account-like phrasing — tests orchestrator routes to product."
+  },
+  {
+    "id": "TC-009",
+    "input": "How does an offset account reduce the interest I pay on my home loan?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["offset", "interest"],
+    "hitl_expected": false,
+    "notes": "Grounded from borrowing_guide.pdf. Fourth PDF — ensures all four KB sources are exercised in evals."
+  },
+  {
+    "id": "TC-010",
+    "input": "What is your exchange rate for converting AUD to US dollars?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["1300 555 100"],
+    "hitl_expected": false,
+    "notes": "FX is outside the knowledge base. Relevance gate fires before any LLM call. sources must be empty. Tests the RAG deflection path inside product subagent."
+  },
+  {
+    "id": "TC-011",
+    "input": "I was charged a $35 account-keeping fee that I was never told about. I want to dispute this.",
+    "customer_id": "C001",
+    "expected_intent": "complaint",
+    "expected_answer_contains": ["CW-2026"],
+    "hitl_expected": false,
+    "notes": "Standard complaint — unexpected fee dispute. Low urgency. Case should be logged (CW-2026-XXXX ID in response). escalated must be False."
+  },
+  {
+    "id": "TC-012",
+    "input": "Your app has been down all morning and I've been unable to access my account. This is unacceptable.",
+    "customer_id": "C002",
+    "expected_intent": "complaint",
+    "expected_answer_contains": ["CW-2026"],
+    "hitl_expected": false,
+    "notes": "Standard complaint — service outage. Low urgency. Case ID expected. Tests a different complaint type from TC-011."
+  },
+  {
+    "id": "TC-013",
+    "input": "There is a $450 transaction on my account that I never made. I believe someone has accessed my account without authorisation.",
+    "customer_id": "C002",
+    "expected_intent": "complaint",
+    "expected_answer_contains": [],
+    "hitl_expected": true,
+    "notes": "Urgent complaint — possible fraud. complaint_node logs the case, sets escalated=True, escalation_node raises GraphInterrupt. eval runner catches interrupt and marks routing correct."
+  },
+  {
+    "id": "TC-014",
+    "input": "I never made this transfer and I'm worried my account has been compromised. I need to speak to someone urgently.",
+    "customer_id": "C001",
+    "expected_intent": "complaint",
+    "expected_answer_contains": [],
+    "hitl_expected": true,
+    "notes": "Urgent fraud complaint, different customer. Second HITL case confirms escalation path is consistent. GraphInterrupt expected."
+  },
+  {
+    "id": "TC-015",
+    "input": "Can you give me tips on how to invest my superannuation for retirement?",
+    "customer_id": "C001",
+    "expected_intent": "out_of_scope",
+    "expected_answer_contains": ["Account enquiries", "Product information"],
+    "hitl_expected": false,
+    "notes": "Investment advice — clearly out of scope. allow_retry must be True. Deflection response lists the three capability areas."
+  },
+  {
+    "id": "TC-016",
+    "input": "Should I buy Bitcoin right now? Is crypto a good investment?",
+    "customer_id": "C001",
+    "expected_intent": "out_of_scope",
+    "expected_answer_contains": ["Account enquiries", "Product information"],
+    "hitl_expected": false,
+    "notes": "Crypto advice — no ambiguity. allow_retry=True. Tests that crypto queries don't bleed into product routing."
+  },
+  {
+    "id": "TC-017",
+    "input": "How do your home loan rates compare to Commonwealth Bank and Westpac?",
+    "customer_id": "C001",
+    "expected_intent": "out_of_scope",
+    "expected_answer_contains": ["Account enquiries", "Product information"],
+    "hitl_expected": false,
+    "notes": "Competitor comparison — explicitly out_of_scope per orchestrator prompt. High risk of misrouting to product because the query mentions home loan rates. Known edge case."
+  },
+  {
+    "id": "TC-018",
+    "input": "What is the weather like in Sydney today?",
+    "customer_id": "C001",
+    "expected_intent": "out_of_scope",
+    "expected_answer_contains": ["Account enquiries", "Product information"],
+    "hitl_expected": false,
+    "notes": "Completely unrelated query. Strong out_of_scope signal — also a sanity check that no hallucination occurs."
+  },
+  {
+    "id": "TC-019",
+    "input": "What home loan rates would apply if I wanted to refinance my existing mortgage?",
+    "customer_id": "C001",
+    "expected_intent": "product",
+    "expected_answer_contains": ["6.54", "variable"],
+    "hitl_expected": false,
+    "notes": "Edge case: 'my existing mortgage' sounds account-specific but the question is about rate products, not account data. Product is correct. Tests orchestrator disambiguation."
+  },
+  {
+    "id": "TC-020",
+    "input": "I'm really frustrated with the Reserve Bank keeping interest rates so high. It's hurting everyday Australians.",
+    "customer_id": "C001",
+    "expected_intent": "out_of_scope",
+    "expected_answer_contains": ["Account enquiries", "Product information"],
+    "hitl_expected": false,
+    "notes": "Edge case: complaint-like sentiment but not directed at Clearwater Bank — it's about the RBA. Should route to out_of_scope, not complaint. High misrouting risk."
+  }
+]

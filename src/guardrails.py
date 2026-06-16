@@ -117,3 +117,104 @@ _STOPWORDS = {
 
 
 #CHECK 1: PII DETECTOR
+def _check_pii(text: str) -> tuple[bool, str]:
+    #Scan for Aus banking PII patterns
+    if _BSB_RE.search(text):
+        return True
+    if _ACC_RE.search(text):
+        return True
+    return False, ""
+
+def _redact_pii(text: str) -> str:
+    # Redact detected PII fragments in-place.
+    # Called only when _check_pii() has already confirmed a match, so we know
+    # at least one pattern will fire.
+    text = _BSB_RE.sub("[BSB REDACTED]", text)
+    text = _ACC_RE.sub(lambda m: f"****{m.group()[-4:]}", text)     # only shows last 4 digits of account number similar to account subagent
+
+    return text
+
+
+#CHECK 2: HALLUCINATION RISK (RAG path only)
+def _check_hallucination(response: str, chunks: list[str]) -> bool:
+    """
+    Term overlap check between retrieved chunks and the generated response.
+ 
+    Returns True (hallucination risk) if the response shares fewer than 15%
+    of key terms with the source chunks.
+ 
+    Why 15%?
+        The threshold is deliberately lenient. Gemini paraphrases heavily, so
+        exact term matching will always undercount true grounding. 15% means
+        roughly 1 in 7 key chunk words must appear, a clear signal the LLM
+        engaged with the retrieved content rather than ignoring it.
+ 
+    Why not LLM-as-judge here?
+        Runtime guardrails must be fast and cheap, every enquiry passes through
+        this node synchronously. An extra Gemini call adds ~1s latency and cost
+        per request. LLM-as-judge is applied offline in run_evals.py (the eval
+        harness) where latency is not a constraint. Separating runtime trip-wire
+        from offline eval scoring is a deliberate architecture choice.
+    """
+    #None RAG paths
+    if not chunks:
+        return False
+    
+    chunk_text      = " ".join(chunks).lower()
+    response_text   = response.lower()
+    # Extract key terms: words longer than 4 chars, not in stopword list.
+    chunk_terms = {
+        word for word in re.findall(r'\b[a-z]{5,}\b', chunk_text)
+        if word not in _STOPWORDS
+    }
+
+    #no meaningful terms found so skip check
+    if not chunk_terms:
+        return False
+    
+    matched_count = sum(1 for term in chunk_terms if term in response_text)
+    overlap_ratio = matched_count / len(chunk_terms)
+
+    # True = hallucination risk flagged.
+    return overlap_ratio < 0.15
+
+
+#CHECK 3: SCOPE VIOLATION
+def _check_scope(text: str) -> bool:
+    # Detect financial advice lanaguage in response
+    return any(pattern.search(text) for pattern in _ADVICE_PATTERNS)
+
+
+#GUARDRAIL NODE
+def guardrail_node(state: EnquiryState) -> dict:
+    """
+    LangGraph node: applies all three checks and writes final_response.
+ 
+    Graph position:
+        [account | product | deflector | escalation] → guardrail_node → END
+ 
+    Reads from state:
+        subagent_response  — raw answer from whichever subagent ran
+        sources            — source filenames (non-empty = RAG path)
+        retrieved_chunks   — raw chunk texts (populated when sources is non-empty)
+ 
+    Writes to state:
+        final_response     — guardrail-cleared answer sent to the customer
+        guardrail_flags    — dict of all check results (for logging and evals)
+ 
+    Check priority:
+        All three checks run against the ORIGINAL subagent_response (not the
+        fallback). This ensures a complete picture of what the subagent produced,
+        even when the response gets replaced.
+ 
+        Hard blocks (replace final_response):
+            Scope check runs first  → _SCOPE_FALLBACK
+            PII check runs second   → _PII_FALLBACK  (overrides scope if both fire)
+ 
+        Soft flag (response still served):
+            Hallucination check     → guardrail_flags["hallucination_risk"] = True
+ 
+        PII overrides scope because leaking account numbers is a higher-severity
+        compliance event than generating advice language. Both firing simultaneously
+        is extremely unlikely in practice.
+    """

@@ -221,7 +221,7 @@ def guardrail_node(state: EnquiryState) -> dict:
     
     response    = state["subagent_response"]
     sources     = state["sources"]
-    chunks      = state["retrieved_chunks"]
+    chunks      = state.get("retrieved_chunks", [])
 
     flags = {
         "pii_detected":         False,

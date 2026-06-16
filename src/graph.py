@@ -60,6 +60,7 @@ from langgraph.types import Command
  
 from src.orchestrator import orchestrator_node, route_to_subagent
 from src.state import EnquiryState, make_initial_state
+from src.guardrails import guardrail_node
 from src.subagents.account import account_node
 from src.subagents.complaint import (complaint_node, escalation_node,
                                       route_after_complaint)
@@ -68,20 +69,6 @@ from src.subagents.product import product_node
  
 load_dotenv()
 
-
-#PASSTHROUGH GUARDRAIL (placeholder)
-# set all guardrail flags to False
-def passthrough_guardrail(state: EnquiryState) -> dict:
-    print(f"\n[GUARDRAIL] post subagent passthrough, no checks applied.")
-    
-    return {
-        "guardrail_flags": {
-            "pii_detected":         False,
-            "hallucination_risk":   False,
-            "out_of_scope":         False,
-        },
-        "final_response":   state["subagent_response"],
-    }
 
 
 #GRAPH ASSEMBLY
@@ -121,7 +108,7 @@ def build_graph(checkpointer=None):
     graph.add_node("complaint",     complaint_node)
     graph.add_node("escalation",    escalation_node)
     graph.add_node("deflector",     deflector_node)
-    graph.add_node("guardrail",     passthrough_guardrail)  
+    graph.add_node("guardrail",     guardrail_node)  
 
     #ENTRY Point
     graph.add_edge(START, "orchestrator")

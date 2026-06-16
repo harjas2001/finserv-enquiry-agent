@@ -97,6 +97,10 @@ class EnquireResponse(BaseModel):
                     "node. The customer's case has been queued for human review.",
     )
     session_id: str = Field(description="Echo of the session_id used. Store for the follow-up turns.")
+    guardrail_flags: dict = Field(
+        default_factory=dict,
+        description="Runtime guardrail results: pii_detected, hallucination_risk, out_of_scope."
+    )
 
 
 #APP
@@ -178,7 +182,8 @@ def enquire(req: EnquireRequest):
             sources=result.get("sources", []),
             allow_retry=result.get("allow_retry", False),
             escalated=result.get("escalated", False),
-            session_id=session_id,            
+            session_id=session_id,  
+            guardrail_flags=result.get("guardrail_flags", {}),          
         )
 
     except HTTPException:
@@ -205,6 +210,7 @@ def enquire(req: EnquireRequest):
                 allow_retry=result.get("allow_retry", False),
                 escalated=result.get("escalated", False),
                 session_id=session_id,
+                guardrail_flags=result.get("guardrail_flags", {}),
             )
  
         # Unexpected exception — log and return 500.

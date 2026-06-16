@@ -22,8 +22,12 @@ fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 httpx>=0.27.0
 
-# ─── Evals (Phase 4 — uncomment when starting Phase 4) ───────────────────────
-# deepeval>=1.0.0
+# ─── Evals (Phase 4 ) ───────────────────────
+deepeval>=1.0.0
+
+# ─── Demo UI (Phase 5) ───────────────────────────────────────────────────────
+streamlit>=1.35.0                # Two-panel demo UI — src/ui/app.py
+requests>=2.32.0                 # HTTP client used by app.py to call the FastAPI backend
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.1             # Load .env API keys

@@ -38,7 +38,7 @@ load_dotenv()
 #   In-scope queries:     0.52 – 0.68  (good match)
 #   Out-of-scope query:   0.92         (no match)
 # Anything above 0.80 means no useful context was found — deflect rather than guess.
-RELEVANCE_THRESHOLD = 0.80
+RELEVANCE_THRESHOLD = 0.75
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 

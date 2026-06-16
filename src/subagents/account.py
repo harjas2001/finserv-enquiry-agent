@@ -82,7 +82,10 @@ Rules:
 7. If a tool result contains an "error" field (for example, the customer is
    not identified), do not attempt to answer the original question. Instead,
    explain that you're unable to verify their identity and direct them to log
-   in or call 1300 555 100. Never substitute a different customer's data.\
+   in or call 1300 555 100. Never substitute a different customer's data.
+8. "Last N transactions" (e.g. "last 3 transactions", "most recent 5") means
+   a COUNT — use limit=N. Never use days=N for a count-based request.
+   "Last N days" or "past N days" means a TIME WINDOW — use days=N.\
 """
 
 
@@ -126,12 +129,17 @@ def get_account_balance(customer_id: str) -> dict:
         "accounts":         accounts,
     }
 
-def get_recent_transactions(customer_id: str, days: int= 30) -> dict:
+def get_recent_transactions(customer_id: str, days: int= 30, limit: int = None) -> dict:
     """
     Returns transactions from the last N days across all of the customer's accounts.
  
     Transactions are sorted by date descending (most recent first).
     The cutoff date is calculated from today's date at call time.
+    
+    limit (optional): if provided, caps the result to the N most recent
+    transactions by count, applied after date filtering and sorting.
+    Use when the customer asks for "last N transactions" as a count
+    (e.g. "last 3 transactions" → limit=3), NOT for day-based queries.
     """
 
     data = _load_mock_data()
@@ -161,6 +169,13 @@ def get_recent_transactions(customer_id: str, days: int= 30) -> dict:
     
     #Get most recent transaction:
     all_transactions.sort(key=lambda x: x["date"], reverse=True)
+
+    # Apply count limit if specified.
+    # This is the fix for queries like "show me my last 3 transactions" —
+    # limit=3 returns the 3 most recent entries regardless of their dates,
+    # rather than filtering by the last 3 days (which may return nothing).
+    if limit is not None:
+        all_transactions = all_transactions[:limit]
 
     return {
         "customer_name":    customer["customer_name"],
@@ -197,9 +212,9 @@ _GET_BALANCE_DECL = types.FunctionDeclaration(
 _GET_TRANSACTION_DECL = types.FunctionDeclaration(
     name="get_recent_transactions",
     description=(
-        "Returns recent transactions for the customer across all accounts, "
-        "filtered to the last N days. Use this when the customer asks about "
-        "recent activity, spending, specific purchases, or transaction history. "
+        "Returns recent transactions for the customer across all accounts. "
+        "Use this when the customer asks about recent activity, spending, "
+        "specific purchases, or transaction history. "
         "The customer is identified automatically from the authenticated "
         "session, do not ask for or include a customer ID."
     ),
@@ -207,8 +222,22 @@ _GET_TRANSACTION_DECL = types.FunctionDeclaration(
         "type": "object",
         "properties": {
             "days": {
-                "type":         "integer",
-                "description":  "Number of past days to unclude (default: 30).",
+                "type":        "integer",
+                "description": (
+                    "Number of past days to include (default: 30). "
+                    "Use ONLY when the customer specifies a time window "
+                    "(e.g. 'last 14 days', 'this month'). "
+                    "Do NOT use this for count-based queries like 'last 3 transactions'."
+                ),
+            },
+            "limit": {
+                "type":        "integer",
+                "description": (
+                    "Maximum number of transactions to return, by count from most recent. "
+                    "Use when the customer asks for 'last N transactions' as a count "
+                    "(e.g. 'show me my last 3 transactions' → limit=3, days=30). "
+                    "Do NOT set days=3 for this — 'last 3 transactions' means count, not days."
+                ),
             },
         },
     },

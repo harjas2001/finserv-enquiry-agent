@@ -176,7 +176,7 @@ def _check_hallucination(response: str, chunks: list[str]) -> bool:
     overlap_ratio = matched_count / len(chunk_terms)
 
     # True = hallucination risk flagged.
-    return overlap_ratio < 0.15
+    return overlap_ratio < 0.05
 
 
 #CHECK 3: SCOPE VIOLATION
@@ -242,7 +242,7 @@ def guardrail_node(state: EnquiryState) -> dict:
     #Check1: PII
     pii_flagged, pii_reason = _check_pii(response)
     if pii_flagged:
-        flags["pii_detected"] = True,
+        flags["pii_detected"] = True
         final = _redact_pii(final)
         print(f"[GUARDRAIL] ⚠  PII detected ({pii_reason}) — redacted in-place")
 

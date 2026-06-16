@@ -163,6 +163,7 @@ Answer using only the context above.\
     return {
         "answer": response.text.strip(),
         "sources": sources,
+        "chunks": [r["text"] for r in results], #raw chunk text for guardrail overlap
         "grounded": True,
         "score": top_score,
     }
@@ -177,7 +178,7 @@ def product_node(state: EnquiryState) -> dict:
         orchestrator_node → (intent="product") → product_node → guardrail_node
  
     Reads from state:  query
-    Writes to state:   subagent_response, sources, escalated
+    Writes to state:   subagent_response, sources, retrieved_chunk, escalated
     """
     query = state["query"]
     print(f"\n[PRODUCT] Query: '{query[:80]}'")
@@ -190,6 +191,7 @@ def product_node(state: EnquiryState) -> dict:
     return {
         "subagent_response":    result["answer"],
         "sources":              result["sources"],
+        "retrieved_chunks":     result.get("chunks", []), #adding this to state for guardrail hallucination check
         "escalated":            False,
     }
 

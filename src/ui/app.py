@@ -85,7 +85,7 @@ DEMO_QUERIES: list[tuple[str, str, str]] = [
     (
         "📈 Super tips",
         "Can you give me tips on investing my super?",
-        "C001",
+        "C002",
     ),
 ]
 
@@ -154,8 +154,8 @@ def _call_backend(query: str, customer_id: str) -> dict:
     key on any failure. Using a private "_error" key (rather than "error")
     avoids colliding with any field name the backend might add in future.
 
-    Timeout is 30 s — Gemini 2.5 Flash Lite with RAG occasionally takes ~10 s,
-    so 30 s gives comfortable headroom without hanging the UI forever.
+    Timeout is 60 s — Gemini 2.5 Flash Lite with RAG occasionally takes ~10 s,
+    so 60 s gives comfortable headroom without hanging the UI forever.
     """
     payload = {
         "query":       query,
@@ -163,14 +163,14 @@ def _call_backend(query: str, customer_id: str) -> dict:
         "session_id":  st.session_state.session_id,
     }
     try:
-        r = requests.post(BACKEND_URL, json=payload, timeout=30)
+        r = requests.post(BACKEND_URL, json=payload, timeout=60)
         r.raise_for_status()
         return r.json()
 
     except requests.exceptions.ConnectionError:
         return {"_error": "Cannot reach backend — is the FastAPI server running on port 8000?"}
     except requests.exceptions.Timeout:
-        return {"_error": "Request timed out after 30 s. The Gemini API may be slow — try again."}
+        return {"_error": "Request timed out after 60 s. The Gemini API may be slow — try again."}
     except requests.exceptions.HTTPError as exc:
         return {"_error": f"HTTP {exc.response.status_code} — {exc.response.text[:300]}"}
     except Exception as exc:
@@ -277,11 +277,11 @@ with col_chat:
     # The backend sets allow_retry=True when the deflector handled the query.
     # We show this as an info banner below the last message, not inside it,
     # so it's visually distinct from the assistant's response text.
-    if st.session_state.last_meta and st.session_state.last_meta.get("allow_retry"):
-        st.info(
-            "💬 That topic is outside what I can help with here. "
-            "Please try a different question."
-        )
+    # if st.session_state.last_meta and st.session_state.last_meta.get("allow_retry"):
+    #     st.info(
+    #         "💬 That topic is outside what I can help with here. "
+    #         "Please try a different question."
+    #     )
 
     # ── Chat input ─────────────────────────────────────────────────────────
     # st.chat_input() renders at the bottom of its column automatically.

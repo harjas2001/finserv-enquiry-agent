@@ -38,9 +38,9 @@ Orchestrator (gemini-3.5-flash, thinking_budget=0)
 | Layer | Technology |
 |---|---|
 | Orchestration | LangGraph `StateGraph` + `MemorySaver` |
-| LLM — orchestrator | `gemini-3.5-flash` (`thinking_budget=0`) |
+| LLM — orchestrator | `gemini-2.5-flash` (`thinking_budget=0`) |
 | LLM — subagents | `gemini-2.5-flash-lite` |
-| LLM — eval judge | `gemini-3.5-flash` |
+| LLM — eval judge | `gemini-2.5-flash` |
 | Embeddings | `gemini-embedding-2` (3072d) via custom `GeminiEmbeddings` class |
 | Vector store | ChromaDB (local) |
 | Guardrails | `src/guardrails.py` — 3 checkers |
@@ -48,52 +48,6 @@ Orchestrator (gemini-3.5-flash, thinking_budget=0)
 | API | FastAPI |
 | Demo UI | Streamlit two-panel app |
 | Deployment target | GCP Cloud Run |
-
----
-
-## Project Structure
-
-```
-finserv-enquiry-agent/
-├── src/
-│   ├── state.py                  # EnquiryState TypedDict — 12 fields, shared across all nodes
-│   ├── graph.py                  # LangGraph StateGraph — node wiring and edge definitions
-│   ├── orchestrator.py           # Intent classification node
-│   ├── guardrails.py             # PII redaction, hallucination check, scope block
-│   ├── subagents/
-│   │   ├── account.py            # Tool calling subagent — fetches live account data
-│   │   ├── product.py            # RAG subagent — retrieves from ChromaDB, grounds response
-│   │   ├── complaint.py          # HITL subagent — logs complaint, triggers interrupt
-│   │   └── deflector.py         # Out-of-scope subagent — pattern match + safe refusal
-│   ├── tools/
-│   │   └── account_tools.py      # get_account_balance, get_account_details (Gemini tool schema)
-│   ├── rag/
-│   │   ├── ingest.py             # PDF chunking + embedding + ChromaDB upsert
-│   │   ├── retriever.py          # Query embedding + cosine similarity retrieval
-│   │   └── embeddings.py         # GeminiEmbeddings class (forces api_version='v1')
-│   └── ui/
-│       └── app.py                # Streamlit demo app — chat panel + system panel
-├── api/
-│   └── main.py                   # FastAPI app — POST /enquire, GET /health
-├── data/
-│   ├── clearwater_home_loan_guide.pdf
-│   ├── clearwater_personal_loan_facts.pdf
-│   ├── clearwater_savings_account_summary.pdf
-│   ├── clearwater_credit_card_guide.pdf
-│   ├── mock_accounts.json        # C001 and C002 — two customers, two accounts each
-│   └── complaints.json           # Complaint log written by complaint subagent
-├── evals/
-│   ├── test_cases.json           # 20 labelled test cases with expected intents + answers
-│   └── run_evals.py              # 3-phase eval harness with CI exit gates
-└── tests/
-    ├── test_orchestrator.py
-    ├── test_account.py
-    ├── test_complaint.py
-    ├── test_deflector.py
-    ├── test_graph.py
-    ├── test_api.py
-    └── test_guardrails.py
-```
 
 ---
 

@@ -63,7 +63,7 @@ FAITHFULNESS_GATE = 0.85
 
 # Judge model — use standard Flash (not Lite) for evaluation accuracy.
 # Judges run offline so latency is not a concern. Better model = better verdicts.
-JUDGE_MODEL = "gemini-2.5-flash"
+JUDGE_MODEL = "gemini-3.5-flash"
 
 # Small delay between graph runs to stay within API rate limits.
 # Set to 0 if you have a paid tier with higher quota.

@@ -45,7 +45,7 @@ load_dotenv()
 
 
 # CONFIG
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash"
 VALID_INTENTS = {"account", "product", "complaint", "out_of_scope"}
 
 
@@ -161,7 +161,7 @@ def orchestrator_node(state: EnquiryState) -> dict:
         print(f"[ORCHESTRATOR] ERROR — {type(e).__name__}: {e}")
         return {
             "intent": "out_of_scope",
-            "error": f"Orchestrator classification failed: {e}",
+            "error": f"Orchestrator classification failed, fallback will trigger: {e}",
             "messages": [],
         }
     

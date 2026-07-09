@@ -33,9 +33,7 @@ Singleton:
 import os 
 from google import genai
 
-_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT")
-_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "australia-southeast1")
-_client = genai.Client | None=None
+_client: genai.Client | None=None
 
 
 def get_client() -> genai.Client:
@@ -49,15 +47,18 @@ def get_client() -> genai.Client:
     global _client
 
     if _client is None:
-        if not _PROJECT:
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
+
+        if not project:
             raise EnvironmentError(
                 "GOOGLE_CLOUD_PROJECT is not set. Required for Agent Platform auth."
             )
         
         _client = genai.Client(
             vertexai=True,
-            project=_PROJECT,
-            location=_LOCATION,
+            project=project,
+            location=location,
         )
 
     return _client

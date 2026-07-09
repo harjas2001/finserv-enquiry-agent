@@ -52,10 +52,10 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 
 from src.state import EnquiryState
+from src.llm_client import get_client
 
 load_dotenv()
 
@@ -259,7 +259,7 @@ DISPATCH: dict = {
 #ACCOUNT NODE
 def account_node(state: EnquiryState) -> dict:
     """
-    LangGraph node — answers account enquiries via two-turn function calling.
+    LangGraph node: answers account enquiries via two-turn function calling.
     Reads from state:  query, customer_id
     Writes to state:   subagent_response, sources, escalated
  
@@ -268,9 +268,6 @@ def account_node(state: EnquiryState) -> dict:
         Execute → Python function → result dict
         Turn 2 → Gemini + result → natural language answer    
     """
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise EnvironmentError("Google API not set.")
     
     query =         state["query"]
     customer_id =   state["customer_id"]
@@ -279,7 +276,7 @@ def account_node(state: EnquiryState) -> dict:
     print(f"[ACCOUNT] Customer ID: '{customer_id}'")
 
     try:
-        client = genai.Client(api_key=api_key)
+        client = get_client()
 
         #TURN 1: ask Gemini which tool to use
         print("[ACCOUNT] Turn 1: sending user query + tool decleration to Gemini")
@@ -447,8 +444,8 @@ if __name__ == "__main__":
     print("\n✓ All Stage A checks passed\n")
  
     # ── Stage B: Live node tests (needs GOOGLE_API_KEY) ───────────────────────
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("Stage B skipped — GOOGLE_API_KEY not set.")
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        print("Stage B skipped: GOOGLE_CLOUD_PROJECT not set.")
         sys.exit(0)
  
     print("=" * 60)

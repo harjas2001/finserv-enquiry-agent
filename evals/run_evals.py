@@ -47,6 +47,7 @@ from langgraph.types import Interrupt
 
 from src.graph import build_graph
 from src.state import make_initial_state
+from src.llm_client import get_client
 
 load_dotenv()
 
@@ -521,13 +522,13 @@ def main() -> None:
         faithfulness < FAITHFULNESS_GATE → exit(1)
         Both pass                        → exit(0)
     """
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = os.environ.get("GOOGLE_CLOUD_PROJECT")
     if not api_key:
-        print("ERROR: GOOGLE_API_KEY not set. Add it to your .env file.")
+        print("ERROR: GOOGLE_CLOUD_PROJECT not set. Add it to your .env file.")
         sys.exit(1)
 
     cases  = load_test_cases()
-    client = genai.Client(api_key=api_key)
+    client = get_client()
 
     # Single shared checkpointer — cases are isolated by unique thread_id
     checkpointer = MemorySaver()

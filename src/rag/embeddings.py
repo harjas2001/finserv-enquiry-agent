@@ -20,12 +20,10 @@ API version: v1
   code and avoids routing issues with newer model names.
 """
 
-import os
 from typing import List
-
-from google import genai
-from google.genai import types
 from langchain_core.embeddings import Embeddings
+
+from src.llm_client import get_client
 
 
 class GeminiEmbeddings(Embeddings):
@@ -42,16 +40,8 @@ class GeminiEmbeddings(Embeddings):
     """
 
     def __init__(self, model: str = "gemini-embedding-2"):
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        if not api_key:
-            raise EnvironmentError(
-                "GOOGLE_API_KEY is not set. Add it to your .env file."
-            )
         self.model = model
-        self.client = genai.Client(
-            api_key=api_key,
-            http_options=types.HttpOptions(api_version="v1"),
-        )
+        self.client = get_client()
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """

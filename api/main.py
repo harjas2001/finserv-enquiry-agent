@@ -272,8 +272,8 @@ if __name__ == "__main__":
     print("\n✓ All Stage A checks passed\n")
  
     # ── Stage B: live end-to-end tests (API key required) ─────────────────
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("Stage B skipped — GOOGLE_API_KEY not set.")
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        print("Stage B skipped — GOOGLE_CLOUD_PROJECT not set.")
         print("\nTo test manually, run:")
         print("  uvicorn api.main:app --reload --port 8000")
         print("  curl -X POST http://localhost:8000/enquire \\")

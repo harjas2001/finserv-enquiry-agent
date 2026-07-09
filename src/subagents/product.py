@@ -22,11 +22,11 @@ Run directly to test:
 import os
 
 from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 
 from src.rag.retriever import format_context, retrieve_with_scores
 from src.state import EnquiryState
+from src.llm_client import get_client
 
 load_dotenv()
 
@@ -144,11 +144,7 @@ Answer using only the context above.\
 """
 
     # Step 5 — Generate answer with Gemini
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GOOGLE_API_KEY is not set. Add it to your .env file.")
-
-    client = genai.Client(api_key=api_key)
+    client = get_client()
     system = SYSTEM_PROMPT if use_grounding else SYSTEM_PROMPT_NO_GROUNDING
 
     response = client.models.generate_content(

@@ -178,6 +178,16 @@ Respond with JSON only:
             config=types.GenerateContentConfig(
                 system_instruction=JUDGE_SYSTEM_PROMPT,
                 temperature=0,
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "faithful": {"type": "BOOLEAN"},
+                        "reason": {"type": "STRING"},
+                    },
+                    "required": ["faithful", "reason"]
+                },
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
             ),
         )
         text = result.text.strip().replace("```json", "").replace("```", "").strip()
@@ -248,6 +258,16 @@ Respond with JSON only:
             config=types.GenerateContentConfig(
                 system_instruction=JUDGE_SYSTEM_PROMPT,
                 temperature=0,
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "completed": {"type": "BOOLEAN"},
+                        "reason": {"type": "STRING"},
+                    },
+                    "required": ["completed", "reason"],
+                },
+                thinking_config=types.ThinkingConfig(thinking_level="low"),
             ),
         )
         text = result.text.strip().replace("```json", "").replace("```", "").strip()

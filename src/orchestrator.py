@@ -116,6 +116,12 @@ def orchestrator_node(state: EnquiryState) -> dict:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0, # set to 0 as we want the routing to be purley deterministic (classification)
+                response_mime_type="text/x.enum",
+                response_schema={
+                    "type": "STRING",
+                    "enum": ["account", "product", "complaint", "out_of_scope"]
+                },
+                thinking_config=types.ThinkingConfig(thinking_level="low")
             ),
         )   
 

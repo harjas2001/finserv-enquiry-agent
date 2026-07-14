@@ -217,8 +217,8 @@ if __name__ == "__main__":
     print("\n✓ Stage A passed\n")
  
     # ── Stage B: live end-to-end tests ────────────────────────────────────
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("Stage B skipped — GOOGLE_API_KEY not set.")
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        print("Stage B skipped — GOOGLE_CLOUD_PROJECT not set.")
         sys.exit(0)
  
     print("=" * 60)

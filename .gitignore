@@ -222,4 +222,4 @@ __marimo__/
 data/knowledge_base/*
 data/chroma_db/*
 data/complaints.json
-evals/eval_runtest1.txt
+evals/*.txt

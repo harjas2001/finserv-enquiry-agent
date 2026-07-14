@@ -53,7 +53,7 @@ Orchestrator (gemini-3.5-flash, thinking_budget=0)
 
 ## Setup
 
-**Prerequisites:** Python 3.11+, a Google AI Studio API key (free tier works).
+**Prerequisites:** Python 3.11+, a GCP project with the Vertex AI API enabled, and `gcloud` CLI authenticated locally.
 
 ```bash
 git clone https://github.com/<your-handle>/finserv-enquiry-agent.git
@@ -62,11 +62,22 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Authenticate locally via Application Default Credentials (no API key required):
+
+```bash
+gcloud auth application-default login
+```
+
 Create a `.env` file in the project root:
 
 ```
-GOOGLE_API_KEY=your_key_here
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_LOCATION=global
 ```
+
+The app authenticates to Gemini via Vertex AI using these credentials — there is no API key anywhere in the codebase. Locally this resolves through ADC; on Cloud Run it resolves through the service account attached to the deployment.
+
+`GOOGLE_CLOUD_LOCATION=global` is deliberate, not a placeholder: `gemini-3.5-flash` is only served from the global/us/eu multi-region endpoints and a handful of single regions, and `australia-southeast1` isn't one of them. Cloud Run, Artifact Registry, and BigQuery are still pinned to `australia-southeast1` — only Gemini inference routes through the global endpoint.
 
 Ingest the knowledge base (one-time):
 
@@ -205,12 +216,13 @@ gcloud run deploy finserv-enquiry-agent \
   --image gcr.io/<project-id>/finserv-enquiry-agent \
   --platform managed \
   --region australia-southeast1 \
-  --set-env-vars GOOGLE_API_KEY=<your-key>
+  --service-account=finserv-agent-sa@<project-id>.iam.gserviceaccount.com \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=<project-id>,GOOGLE_CLOUD_LOCATION=global
 ```
 
 `GET /health` serves as the Cloud Run liveness probe.
 
-In a production architecture, the `GOOGLE_API_KEY` would be injected from Secret Manager, and the eval harness would run as a Cloud Build step gating each deployment.
+Authentication is via the attached service account's Application Default Credentials — no API key or secret is required for inference. The eval harness runs as a CI/CD step gating each deployment (see CI/CD pipeline).
 
 ---
 

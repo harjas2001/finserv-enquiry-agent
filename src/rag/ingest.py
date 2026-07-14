@@ -1,5 +1,5 @@
 """
-Phase 2 — RAG Knowledge Base Ingestion Pipeline
+Phase 2: RAG Knowledge Base Ingestion Pipeline
 src/rag/ingest.py
 
 Run once (or whenever documents change) to populate ChromaDB.
@@ -13,7 +13,7 @@ What this script does:
   4. Store — persists to ChromaDB at data/chroma_db/
 """
 
-import os
+#import os
 import sys
 from pathlib import Path
 
@@ -30,7 +30,7 @@ KNOWLEDGE_BASE_DIR = Path("data/knowledge_base")
 CHROMA_PERSIST_DIR = "data/chroma_db"
 COLLECTION_NAME    = "product_knowledge"
 
-# Chunk size in tokens. 512 tokens ≈ 350–400 words — a substantial paragraph.
+# Chunk size in tokens. 512 tokens ≈ 350–400 words, a substantial paragraph.
 # The overlap (50 tokens) prevents a key concept from being cut mid-sentence
 # and lost to retrieval because it sat at a chunk boundary.
 CHUNK_SIZE    = 512
@@ -110,7 +110,7 @@ def chunk_documents(documents: list) -> list:
     the same places because RecursiveCharacterTextSplitter splits at
     paragraph/sentence boundaries regardless.
 
-    To switch to exact token counting on your machine:
+    To switch to exact token counting machine:
         splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             model_name="cl100k_base",
             chunk_size=512,

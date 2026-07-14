@@ -77,11 +77,11 @@ from datetime import datetime
 from pathlib import Path
  
 from dotenv import load_dotenv
-from google import genai
 from google.genai import types
 from langgraph.types import interrupt
  
 from src.state import EnquiryState
+from src.llm_client import get_client
  
 load_dotenv()
 
@@ -264,10 +264,6 @@ def complaint_node(state: EnquiryState) -> dict:
     escalated=True means route_after_complaint() will send this enquiry to
     escalation_node for human review before the guardrail layer.
     """
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GOOGLE_API_KEY is not set.")
- 
     query       = state["query"]
     customer_id = state["customer_id"]
  
@@ -275,7 +271,7 @@ def complaint_node(state: EnquiryState) -> dict:
     print(f"[COMPLAINT] Customer ID: '{customer_id}'")
 
     try:
-        client = genai.Client(api_key=api_key)
+        client = get_client()
 
         # Turn 1: sending query + tool decleration to Gemini (forced)
         print("[COMPLAINT] Turn 1: sending query + tool declaration to Gemini (forced)")
@@ -544,8 +540,8 @@ if __name__ == "__main__":
     print("\n✓ All Stage A checks passed\n")
  
     # ── Stage B: live node tests ──────────────────────────────────────────────
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("Stage B skipped — GOOGLE_API_KEY not set.")
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        print("Stage B skipped — GOOGLE_CLOUD_PROJECT not set.")
         sys.exit(0)
  
     print("=" * 60)

@@ -35,11 +35,11 @@ import os
 import sys 
 from dotenv import load_dotenv
 
-from google import genai
 from google.genai import types
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.state import EnquiryState
+from src.llm_client import get_client
 
 load_dotenv()
 
@@ -103,16 +103,12 @@ def orchestrator_node(state: EnquiryState) -> dict:
       Routes to "out_of_scope" so the deflector handles the customer gracefully,
       and writes the exception to state["error"] for the FastAPI layer to log.
     """
-
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise EnvironmentError("GOOGLE_API_KEY is not set")
     
     query = state["query"]
     print(f"\n[ORCHESTRATOR] Classifying: '{query[:80]}'")
 
     try: 
-        client = genai.Client(api_key=api_key)
+        client = get_client()
 
         response = client.models.generate_content(
             model=GEMINI_MODEL,
@@ -120,6 +116,12 @@ def orchestrator_node(state: EnquiryState) -> dict:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0, # set to 0 as we want the routing to be purley deterministic (classification)
+                response_mime_type="text/x.enum",
+                response_schema={
+                    "type": "STRING",
+                    "enum": ["account", "product", "complaint", "out_of_scope"]
+                },
+                thinking_config=types.ThinkingConfig(thinking_level="low")
             ),
         )   
 
@@ -212,8 +214,8 @@ def route_to_subagent(state: EnquiryState) -> str:
 if __name__ == "__main__":
     from src.state import make_initial_state
 
-    if not os.environ.get("GOOGLE_API_KEY"):
-        print("ERROR: Google API key not set.")
+    if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+        print("ERROR: GOOGLE_CLOUD_PROJECT not set.")
         sys.exit(1)
 
     print("=" * 60)

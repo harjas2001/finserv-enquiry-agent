@@ -276,9 +276,14 @@ def run_case(graph, case: dict) -> dict:
 
     Two execution paths:
         Normal  — graph.invoke() returns the final state dict.
-        HITL    — graph.invoke() raises GraphInterrupt (urgent complaint).
-                  We retrieve the saved state from the checkpointer via
-                  graph.get_state(config) and mark routing from there.
+        HITL (paused) — graph.invoke() returns normally, but
+                        escalated=True and final_response="". This is what
+                        the installed LangGraph version actually does on
+                        interrupt(). Detected inline, no extra state fetch
+                        needed — final_state already has everything.
+        HITL (raises) — graph.invoke() raises GraphInterrupt. Kept as a
+                        fallback for other LangGraph versions; state is
+                        retrieved via graph.get_state(config).
 
     Thread IDs:
         Each case uses a unique thread_id ("eval-TC-001" etc.) so the shared
@@ -320,17 +325,50 @@ def run_case(graph, case: dict) -> dict:
         # ── Normal path ───────────────────────────────────────────────────────
         final_state = graph.invoke(initial_state, config=config)
 
-        result["actual_intent"]   = final_state.get("intent", "")
-        result["final_response"]  = final_state.get("final_response", "")
-        result["sources"]         = final_state.get("sources", [])
-        result["retrieved_chunks"]= final_state.get("retrieved_chunks", [])
-        result["routing_correct"] = (
-            result["actual_intent"] == case["expected_intent"]
-        )
-        result["content_match"]   = _content_match(
-            result["final_response"],
-            case["expected_answer_contains"],
-        )
+        # Interrupt detection (paused-state form):
+        # LangGraph 0.2+ returns the paused state from invoke() when
+        # interrupt() fires, rather than raising an exception — same pattern
+        # api/main.py already detects. Signature: escalated=True (set by
+        # complaint_node) + final_response="" (guardrail never ran because
+        # the graph paused before reaching it).
+        #
+        # This has to be checked here, not just in the "except Interrupt"
+        # branch below: on the installed LangGraph version, invoke() does NOT
+        # raise on interrupt, so that except branch never fires and these
+        # cases were silently falling through as "normal" — routing_correct
+        # came out right (intent matched) but content_match/task_completion
+        # were being scored against an empty response, which always fails.
+        # The escalation was never wrong; the harness just wasn't looking in
+        # the right place.
+
+
+        if final_state.get("escalated") and not final_state.get("final_response"):
+            result["hitl_triggered"]  = True
+            result["actual_intent"]   = final_state.get("intent", "")
+            result["final_response"]  = final_state.get("subagent_response", "")
+            result["sources"]         = final_state.get("sources", [])
+            result["retrieved_chunks"]= final_state.get("retrieved_chunks", [])
+            result["routing_correct"] = (
+                result["actual_intent"] == case["expected_intent"]
+                and final_state.get("escalated", False) is True
+            )
+            # content_match vacuously True for HITL cases (expected_answer_contains=[])
+            result["content_match"] = _content_match(
+                result["final_response"],
+                case["expected_answer_contains"],
+            )
+        else:
+            result["actual_intent"]   = final_state.get("intent", "")
+            result["final_response"]  = final_state.get("final_response", "")
+            result["sources"]         = final_state.get("sources", [])
+            result["retrieved_chunks"]= final_state.get("retrieved_chunks", [])
+            result["routing_correct"] = (
+                result["actual_intent"] == case["expected_intent"]
+            )
+            result["content_match"]   = _content_match(
+                result["final_response"],
+                case["expected_answer_contains"],
+            )
 
     except Interrupt:
         # ── HITL path ─────────────────────────────────────────────────────────
